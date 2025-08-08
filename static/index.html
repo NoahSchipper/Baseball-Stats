@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Player Stat Comparison</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="container">
+      <h2>Compare Two Baseball Players</h2>
+
+      <div class="input-row">
+        <label>
+          Player A: <input type="text" id="playerA" placeholder="Mike Trout" />
+        </label>
+        <label>
+          Player B:
+          <input type="text" id="playerB" placeholder="Mookie Betts" />
+        </label>
+
+        <select id="viewMode">
+          <option value="career">Career Totals (Through 2024)</option>
+          <option value="combined">Career + Current Season</option>
+          <option value="newest">Season-by-Season (Newest First)</option>
+          <option value="oldest">Season-by-Season (Oldest First)</option>
+          <option value="live">Current Season Only (Live Stats)</option>
+        </select>
+
+        <button onclick="comparePlayers()">Compare</button>
+      </div>
+
+      <table id="comparisonTable" border="1" cellspacing="0" cellpadding="5">
+        <thead>
+          <tr>
+            <th id="playerAName">
+              <img
+                id="photoA"
+                src=""
+                alt="Player A Photo"
+                style="display: none"
+              />
+              <div class="player-name">Player A</div>
+            </th>
+            <th id="Logo">
+              <div class="logo-cell">
+                <img
+                  id="logo"
+                  src="static/assets/schipperStatlines.png"
+                  alt="Logo"
+                />
+              </div>
+            </th>
+            <th id="playerBName">
+              <img
+                id="photoB"
+                src=""
+                alt="Player B Photo"
+                style="display: none"
+              />
+              <div class="player-name">Player B</div>
+            </th>
+          </tr>
+          <tr>
+            <th colspan="3" class="stat-header">Stats</th>
+          </tr>
+        </thead>
+        <tbody id="comparisonBody">
+          <!-- Filled dynamically by JS -->
+        </tbody>
+      </table>
+    </div>
+    <script src="/static/main.js"></script>
+  </body>
+</html>
