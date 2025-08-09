@@ -1,4 +1,5 @@
-const labelMap = {
+// Label maps for different player types
+const hitterLabelMap = {
   war: "WAR",
   games: "G",
   plate_appearances: "PA",
@@ -13,8 +14,58 @@ const labelMap = {
   ops_plus: "OPS+",
 };
 
-// Same label map for all modes now that we have career fWAR
-const liveLabelMap = labelMap;
+const pitcherLabelMap = {
+  war: "WAR",
+  wins: "W",
+  losses: "L",
+  games: "G",
+  games_started: "GS",
+  complete_games: "CG",
+  shutouts: "SHO",
+  saves: "SV",
+  innings_pitched: "IP",
+  hits_allowed: "H",
+  earned_runs: "ER",
+  home_runs_allowed: "HR",
+  walks: "BB",
+  strikeouts: "SO",
+  era: "ERA",
+  whip: "WHIP"
+};
+
+// Season view label maps
+const hitterSeasonLabelMap = {
+  war: "WAR",
+  games: "G", 
+  pa: "PA",
+  hits: "H",
+  home_runs: "HR",
+  rbi: "RBI",
+  stolen_bases: "SB",
+  ba: "BA",
+  obp: "OBP",
+  slg: "SLG",
+  ops: "OPS"
+};
+
+const pitcherSeasonLabelMap = {
+  war: "WAR",
+  wins: "W",
+  losses: "L",
+  games: "G",
+  games_started: "GS",
+  complete_games: "CG",
+  shutouts: "SHO",
+  saves: "SV",
+  innings_pitched: "IP",
+  hits_allowed: "H",
+  earned_runs: "ER",
+  home_runs_allowed: "HR",
+  walks: "BB",
+  strikeouts: "SO",
+  era: "ERA",
+  whip: "WHIP"
+};
 
 function extractStats(res) {
   if (res.error) return null;
@@ -50,7 +101,7 @@ function updateComparisonTable(resA, resB, nameA, nameB) {
   tbody.innerHTML = "";
 
   if (!resA || !resB) {
-    tbody.innerHTML = "<tr><td colspan='4'>Error loading player data.</td></tr>";
+    tbody.innerHTML = `<tr><td colspan='4'>Error loading player data.</td></tr>`;
     return;
   }
   if (resA.error || resB.error) {
@@ -58,27 +109,58 @@ function updateComparisonTable(resA, resB, nameA, nameB) {
     return;
   }
 
+  // Check if comparing different player types
+  if (resA.player_type !== resB.player_type) {
+    tbody.innerHTML = `<tr><td colspan='4'>Cannot compare pitcher and hitter statistics.</td></tr>`;
+    return;
+  }
+
   const mode = resA.mode;
+  const playerType = resA.player_type || "hitter"; // default to hitter for backward compatibility
 
   if (["career", "combined", "live"].includes(mode)) {
     const statsA = extractStats(resA);
     const statsB = extractStats(resB);
 
-    // Use the same label map for all modes now that we have career fWAR
-    const currentLabelMap = labelMap;
+    // Choose the correct label map based on player type
+    const currentLabelMap = playerType === "pitcher" ? pitcherLabelMap : hitterLabelMap;
 
     for (const key of Object.keys(currentLabelMap)) {
       const statName = currentLabelMap[key];
       let valA = statsA[key] ?? 0;
       let valB = statsB[key] ?? 0;
 
-      const decimalStats = ["war", "batting_average", "on_base_percentage", "slugging_percentage", "ops"];
-      if (decimalStats.includes(key)) {
-        valA = valA ? Number(valA).toFixed(3).replace(/^0/, '') : ".000";
-        valB = valB ? Number(valB).toFixed(3).replace(/^0/, '') : ".000";
-      } else if (key === "ops_plus") {
-        valA = valA ? Math.round(valA) : 0;
-        valB = valB ? Math.round(valB) : 0;
+      // Format different stats appropriately
+      if (playerType === "pitcher") {
+        // Pitcher decimal stats
+        const decimalStats = ["war", "era", "whip", "innings_pitched"];
+        if (decimalStats.includes(key)) {
+          if (key === "war") {
+            valA = valA ? Number(valA).toFixed(1) : "0.0";
+            valB = valB ? Number(valB).toFixed(1) : "0.0";
+          } else if (key === "innings_pitched") {
+            valA = valA ? Number(valA).toFixed(1) : "0.0";
+            valB = valB ? Number(valB).toFixed(1) : "0.0";
+          } else {
+            valA = valA ? Number(valA).toFixed(2) : "0.00";
+            valB = valB ? Number(valB).toFixed(2) : "0.00";
+          }
+        }
+      } else {
+        // Hitter decimal stats
+        const decimalStats = ["war", "batting_average", "on_base_percentage", "slugging_percentage", "ops"];
+        if (decimalStats.includes(key)) {
+          if (key === "war") {
+            valA = valA ? Number(valA).toFixed(1) : "0.0";
+            valB = valB ? Number(valB).toFixed(1) : "0.0";
+          } else {
+            valA = valA ? Number(valA).toFixed(3).replace(/^0/, '') : ".000";
+            valB = valB ? Number(valB).toFixed(3).replace(/^0/, '') : ".000";
+          }
+        } else if (key === "ops_plus") {
+          valA = valA ? Math.round(valA) : 0;
+          valB = valB ? Math.round(valB) : 0;
+        }
       }
 
       const row = document.createElement("tr");
@@ -106,21 +188,8 @@ function updateComparisonTable(resA, resB, nameA, nameB) {
       yearsArray.sort((a, b) => b - a); // newest first for both "newest" and default
     }
 
-    // Include WAR in season view since we have historical WAR data
-    // Note: Flask backend returns pa, ba, obp, slg (not renamed)
-    const seasonLabelMap = {
-      war: "WAR",
-      games: "G", 
-      pa: "PA",
-      hits: "H",
-      home_runs: "HR",
-      rbi: "RBI",
-      stolen_bases: "SB",
-      ba: "BA",
-      obp: "OBP",
-      slg: "SLG",
-      ops: "OPS"
-    };
+    // Choose the correct season label map based on player type
+    const seasonLabelMap = playerType === "pitcher" ? pitcherSeasonLabelMap : hitterSeasonLabelMap;
 
     yearsArray.forEach(year => {
       const playerAStat = statsA.find(s => s.year === year) || {};
@@ -138,10 +207,33 @@ function updateComparisonTable(resA, resB, nameA, nameB) {
         let valA = playerAStat[key] ?? 0;
         let valB = playerBStat[key] ?? 0;
 
-        const decimalStats = ["war", "ba", "obp", "slg", "ops"];
-        if (decimalStats.includes(key)) {
-          valA = valA ? Number(valA).toFixed(3).replace(/^0/, '') : ".000";
-          valB = valB ? Number(valB).toFixed(3).replace(/^0/, '') : ".000";
+        // Format different stats appropriately based on player type
+        if (playerType === "pitcher") {
+          const decimalStats = ["war", "era", "whip", "innings_pitched"];
+          if (decimalStats.includes(key)) {
+            if (key === "war") {
+              valA = valA ? Number(valA).toFixed(1) : "0.0";
+              valB = valB ? Number(valB).toFixed(1) : "0.0";
+            } else if (key === "innings_pitched") {
+              valA = valA ? Number(valA).toFixed(1) : "0.0";
+              valB = valB ? Number(valB).toFixed(1) : "0.0";
+            } else {
+              valA = valA ? Number(valA).toFixed(2) : "0.00";
+              valB = valB ? Number(valB).toFixed(2) : "0.00";
+            }
+          }
+        } else {
+          // Hitter formatting
+          const decimalStats = ["war", "ba", "obp", "slg", "ops"];
+          if (decimalStats.includes(key)) {
+            if (key === "war") {
+              valA = valA ? Number(valA).toFixed(1) : "0.0";
+              valB = valB ? Number(valB).toFixed(1) : "0.0";
+            } else {
+              valA = valA ? Number(valA).toFixed(3).replace(/^0/, '') : ".000";
+              valB = valB ? Number(valB).toFixed(3).replace(/^0/, '') : ".000";
+            }
+          }
         }
 
         const row = document.createElement("tr");
@@ -194,8 +286,9 @@ async function comparePlayers() {
 document.getElementById("viewMode").addEventListener("change", comparePlayers);
 
 document.addEventListener("DOMContentLoaded", () => {
+  // Default to comparing a hitter and pitcher to test the functionality
   document.getElementById("playerA").value = "Mike Trout";
-  document.getElementById("playerB").value = "Mookie Betts";
-  document.getElementById("viewMode").value = "combined"; // default mode
+  document.getElementById("playerB").value = "Kyle Tucker";
+  document.getElementById("viewMode").value = "combined";
   comparePlayers();
 });

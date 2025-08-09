@@ -1,15 +1,16 @@
 from flask import Flask, request, jsonify, send_from_directory
 from pybaseball import playerid_lookup, batting_stats, cache
+from pybaseball import pitching_stats
 import sqlite3
 import pandas as pd
 import os
 import datetime
 
 app = Flask(__name__, static_folder="static")
-
 cache.enable()
 
 DB_PATH = r"C:\Users\noahs\OneDrive\Documents\Baseball Stats\lahman2024.db"
+
 
 def get_career_war(playerid):
     """Get career WAR from JEFFBAGWELL database"""
@@ -17,7 +18,6 @@ def get_career_war(playerid):
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
         
-        # Query career WAR total
         cursor.execute("""
             SELECT SUM(WAR162) as career_war 
             FROM jeffbagwell_war 
@@ -35,18 +35,17 @@ def get_career_war(playerid):
         print(f"Error getting career WAR: {e}")
         return 0.0
 
+
 def get_season_war_history(playerid):
     """Get season-by-season WAR from JEFFBAGWELL database"""
     try:
         conn = sqlite3.connect(DB_PATH)
-        
         df = pd.read_sql_query("""
             SELECT year_ID, WAR162 as war
             FROM jeffbagwell_war 
             WHERE key_bbref = ?
             ORDER BY year_ID DESC
         """, conn, params=(playerid,))
-        
         conn.close()
         return df
         
@@ -54,9 +53,45 @@ def get_season_war_history(playerid):
         print(f"Error getting season WAR history: {e}")
         return pd.DataFrame()
 
+
+def detect_player_type(playerid, conn):
+    """Detect if player is primarily a pitcher or hitter based on their stats"""
+    pitching_query = """
+    SELECT COUNT(*) as pitch_seasons, SUM(g) as total_games_pitched, SUM(gs) as total_starts
+    FROM lahman_pitching WHERE playerid = ?
+    """
+    cursor = conn.cursor()
+    cursor.execute(pitching_query, (playerid,))
+    pitch_result = cursor.fetchone()
+    
+    batting_query = """
+    SELECT COUNT(*) as bat_seasons, SUM(g) as total_games_batted, SUM(ab) as total_at_bats
+    FROM lahman_batting WHERE playerid = ?
+    """
+    cursor.execute(batting_query, (playerid,))
+    bat_result = cursor.fetchone()
+    
+    pitch_seasons = pitch_result[0] if pitch_result else 0
+    total_games_pitched = pitch_result[1] if pitch_result and pitch_result[1] else 0
+    total_starts = pitch_result[2] if pitch_result and pitch_result[2] else 0
+    
+    bat_seasons = bat_result[0] if bat_result else 0
+    total_games_batted = bat_result[1] if bat_result and bat_result[1] else 0
+    total_at_bats = bat_result[2] if bat_result and bat_result[2] else 0
+    
+    if pitch_seasons >= 3 or total_games_pitched >= 50 or total_starts >= 10:
+        return "pitcher"
+    elif bat_seasons >= 3 or total_at_bats >= 300:
+        return "hitter"
+    else:
+        return "pitcher" if pitch_seasons > 0 else "hitter"
+
+
+
 @app.route("/")
 def serve_index():
     return send_from_directory("static", "index.html")
+
 
 @app.route("/player")
 def get_player_stats():
@@ -83,7 +118,8 @@ def get_player_stats():
 
     playerid = row[0]
 
-    # MLBAM ID for photo
+    player_type = detect_player_type(playerid, conn)
+
     mlb_id = None
     try:
         lookup = playerid_lookup(last, first)
@@ -96,30 +132,320 @@ def get_player_stats():
     if mlb_id:
         photo_url = f"https://img.mlbstatic.com/mlb-photos/image/upload/v1/people/{mlb_id}/headshot/67/current.jpg"
 
-    # Lahman batting stats - INCLUDE sh (sacrifice hits) for plate appearances calculation
+    if player_type == "pitcher":
+        return handle_pitcher_stats(playerid, conn, mode, photo_url, first, last)
+    else:
+        conn.close()
+        return handle_hitter_stats(playerid, mode, photo_url, first, last)
+
+
+def handle_pitcher_stats(playerid, conn, mode, photo_url, first, last):
     stats_query = """
-    SELECT yearid, teamid, g, ab, h, hr, rbi, sb, bb, hbp, sf, sh, `2b`, `3b`
+    SELECT yearid, teamid, w, l, g, gs, cg, sho, sv, ipouts, h, er, hr, bb, so, era
+    FROM lahman_pitching WHERE playerid = ?
+    """
+    df_lahman = pd.read_sql_query(stats_query, conn, params=(playerid,))
+    conn.close()
+
+    current_year = datetime.date.today().year
+    live_row = pd.DataFrame()
+    
+    try:
+        df_live = pitching_stats(current_year, qual=0)
+        
+        if not df_live.empty:
+            df_live['Name'] = df_live['Name'].str.strip()
+            df_live['Name_lower'] = df_live['Name'].str.lower()
+            
+            search_patterns = [
+                f"{first.lower()} {last.lower()}",
+                f"{last.lower()}, {first.lower()}",
+                f"{first.lower()}.{last.lower()}",
+                f"{first[0].lower()}.{last.lower()}",
+                f"{last.lower()}"
+            ]
+            
+            for pattern in search_patterns:
+                live_row = df_live[df_live['Name_lower'] == pattern]
+                if not live_row.empty:
+                    break
+            
+            if live_row.empty:
+                last_name_matches = df_live[df_live['Name_lower'].str.contains(last.lower(), na=False)]
+                if not last_name_matches.empty:
+                    for _, row in last_name_matches.iterrows():
+                        if first.lower() in row['Name_lower']:
+                            live_row = last_name_matches[last_name_matches['Name'] == row['Name']]
+                            break
+                    
+                    if live_row.empty:
+                        live_row = last_name_matches.head(1)
+        
+    except Exception as e:
+        live_row = pd.DataFrame()
+
+    if mode == "career":
+        if df_lahman.empty:
+            return jsonify({"error": "No pitching stats found"}), 404
+
+        totals = df_lahman.agg({
+            "w": "sum", "l": "sum", "g": "sum", "gs": "sum", "cg": "sum",
+            "sho": "sum", "sv": "sum", "ipouts": "sum", "h": "sum", "er": "sum",
+            "hr": "sum", "bb": "sum", "so": "sum"
+        }).to_dict()
+
+        innings_pitched = totals["ipouts"] / 3.0 if totals["ipouts"] > 0 else 0
+        era = (totals["er"] * 9) / innings_pitched if innings_pitched > 0 else 0
+        whip = (totals["h"] + totals["bb"]) / innings_pitched if innings_pitched > 0 else 0
+        
+        career_war = get_career_war(playerid)
+
+        result = {
+            "war": round(career_war, 1),
+            "wins": int(totals["w"]),
+            "losses": int(totals["l"]),
+            "games": int(totals["g"]),
+            "games_started": int(totals["gs"]),
+            "complete_games": int(totals["cg"]),
+            "shutouts": int(totals["sho"]),
+            "saves": int(totals["sv"]),
+            "innings_pitched": round(innings_pitched, 1),
+            "hits_allowed": int(totals["h"]),
+            "earned_runs": int(totals["er"]),
+            "home_runs_allowed": int(totals["hr"]),
+            "walks": int(totals["bb"]),
+            "strikeouts": int(totals["so"]),
+            "era": round(era, 2),
+            "whip": round(whip, 2)
+        }
+
+        return jsonify({
+            "mode": "career",
+            "player_type": "pitcher",
+            "totals": result,
+            "photo_url": photo_url
+        })
+
+    elif mode == "season":
+        if df_lahman.empty:
+            return jsonify({"error": "No pitching stats found"}), 404
+
+        df_war_history = get_season_war_history(playerid)
+
+        df = df_lahman.copy()
+        df["innings_pitched"] = df["ipouts"] / 3.0
+        df["era_calc"] = df.apply(lambda row: (row["er"] * 9) / (row["ipouts"] / 3.0) if row["ipouts"] > 0 else 0, axis=1)
+        df["whip"] = df.apply(lambda row: (row["h"] + row["bb"]) / (row["ipouts"] / 3.0) if row["ipouts"] > 0 else 0, axis=1)
+
+        df["era_final"] = df.apply(lambda row: row["era"] if row["era"] > 0 else row["era_calc"], axis=1)
+
+        if not df_war_history.empty:
+            df = df.merge(df_war_history, left_on='yearid', right_on='year_ID', how='left')
+            df['war'] = df['war'].fillna(0)
+        else:
+            df['war'] = 0
+
+        df_result = df[[
+            "yearid", "teamid", "w", "l", "g", "gs", "cg", "sho", "sv", 
+            "innings_pitched", "h", "er", "hr", "bb", "so", "era_final", "whip", "war"
+        ]].rename(columns={
+            "yearid": "year", "w": "wins", "l": "losses", "g": "games", 
+            "gs": "games_started", "cg": "complete_games", "sho": "shutouts", 
+            "sv": "saves", "h": "hits_allowed", "er": "earned_runs", 
+            "hr": "home_runs_allowed", "bb": "walks", "so": "strikeouts", "era_final": "era"
+        })
+
+        return jsonify({
+            "mode": "season",
+            "player_type": "pitcher",
+            "stats": df_result.to_dict(orient="records"),
+            "photo_url": photo_url
+        })
+
+    elif mode == "live":
+        if live_row.empty:
+            return jsonify({"error": f"No live pitching stats found for {first} {last}"}), 404
+
+        live_stats = live_row.to_dict(orient="records")[0]
+
+        war_value = 0
+        for war_col in ['WAR', 'war', 'War', 'fWAR', 'bWAR', 'rWAR']:
+            if war_col in live_stats and not pd.isna(live_stats[war_col]):
+                war_value = float(live_stats[war_col])
+                break
+
+        def safe_get_stat(stat_names, default=0):
+            for name in stat_names:
+                if name in live_stats and not pd.isna(live_stats[name]):
+                    return live_stats[name]
+            return default
+
+        wins = int(safe_get_stat(['W', 'Wins']))
+        losses = int(safe_get_stat(['L', 'Losses'])) 
+        games = int(safe_get_stat(['G', 'Games', 'GP']))
+        games_started = int(safe_get_stat(['GS', 'Games Started']))
+        complete_games = int(safe_get_stat(['CG', 'Complete Games']))
+        shutouts = int(safe_get_stat(['SHO', 'Shutouts']))
+        saves = int(safe_get_stat(['SV', 'Saves']))
+        
+        ip_raw = safe_get_stat(['IP', 'Innings Pitched', 'InningsPitched'])
+        if isinstance(ip_raw, str):
+            try:
+                if '/' in ip_raw:
+                    parts = ip_raw.split()
+                    innings = float(parts[0])
+                    if len(parts) > 1 and '/' in parts[1]:
+                        frac_parts = parts[1].split('/')
+                        innings += float(frac_parts[0]) / float(frac_parts[1])
+                    innings_pitched = innings
+                else:
+                    innings_pitched = float(ip_raw)
+            except:
+                innings_pitched = 0.0
+        else:
+            innings_pitched = float(ip_raw) if ip_raw else 0.0
+            
+        hits_allowed = int(safe_get_stat(['H', 'Hits', 'Hits Allowed']))
+        earned_runs = int(safe_get_stat(['ER', 'Earned Runs']))
+        home_runs_allowed = int(safe_get_stat(['HR', 'Home Runs', 'HRA']))
+        walks = int(safe_get_stat(['BB', 'Walks', 'Walk']))
+        strikeouts = int(safe_get_stat(['SO', 'K', 'Strikeouts']))
+        
+        era = safe_get_stat(['ERA', 'era'])
+        if era == 0 and innings_pitched > 0:
+            era = (earned_runs * 9) / innings_pitched
+        era = float(era)
+        
+        whip = safe_get_stat(['WHIP', 'whip'])
+        if whip == 0 and innings_pitched > 0:
+            whip = (hits_allowed + walks) / innings_pitched
+        whip = float(whip)
+
+        result = {
+            "war": round(war_value, 1),
+            "wins": wins,
+            "losses": losses,
+            "games": games,
+            "games_started": games_started,
+            "complete_games": complete_games,
+            "shutouts": shutouts,
+            "saves": saves,
+            "innings_pitched": round(innings_pitched, 1),
+            "hits_allowed": hits_allowed,
+            "earned_runs": earned_runs,
+            "home_runs_allowed": home_runs_allowed,
+            "walks": walks,
+            "strikeouts": strikeouts,
+            "era": round(era, 2),
+            "whip": round(whip, 3)
+        }
+
+        return jsonify({
+            "mode": "live",
+            "player_type": "pitcher",
+            "stats": result,
+            "photo_url": photo_url
+        })
+
+    elif mode == "combined":
+        if df_lahman.empty:
+            return jsonify({"error": "No career pitching stats found"}), 404
+
+        totals = df_lahman.agg({
+            "w": "sum", "l": "sum", "g": "sum", "gs": "sum", "cg": "sum",
+            "sho": "sum", "sv": "sum", "ipouts": "sum", "h": "sum", "er": "sum",
+            "hr": "sum", "bb": "sum", "so": "sum"
+        }).to_dict()
+
+        career_war = get_career_war(playerid)
+
+        current_season_war = 0
+        if not live_row.empty:
+            live_stats = live_row.to_dict(orient="records")[0]
+            totals["w"] += int(live_stats.get("W", 0))
+            totals["l"] += int(live_stats.get("L", 0))
+            totals["g"] += int(live_stats.get("G", 0))
+            totals["gs"] += int(live_stats.get("GS", 0))
+            totals["cg"] += int(live_stats.get("CG", 0))
+            totals["sho"] += int(live_stats.get("SHO", 0))
+            totals["sv"] += int(live_stats.get("SV", 0))
+            live_ip = float(live_stats.get("IP", 0))
+            totals["ipouts"] += int(live_ip * 3)
+            totals["h"] += int(live_stats.get("H", 0))
+            totals["er"] += int(live_stats.get("ER", 0))
+            totals["hr"] += int(live_stats.get("HR", 0))
+            totals["bb"] += int(live_stats.get("BB", 0))
+            totals["so"] += int(live_stats.get("SO", 0))
+
+            for war_col in ['WAR', 'war', 'War', 'fWAR', 'bWAR', 'rWAR']:
+                if war_col in live_stats and not pd.isna(live_stats[war_col]):
+                    current_season_war = float(live_stats[war_col])
+                    break
+
+        innings_pitched = totals["ipouts"] / 3.0 if totals["ipouts"] > 0 else 0
+        era = (totals["er"] * 9) / innings_pitched if innings_pitched > 0 else 0
+        whip = (totals["h"] + totals["bb"]) / innings_pitched if innings_pitched > 0 else 0
+        combined_war = career_war + current_season_war
+
+        result = {
+            "war": round(combined_war, 1),
+            "wins": int(totals["w"]),
+            "losses": int(totals["l"]),
+            "games": int(totals["g"]),
+            "games_started": int(totals["gs"]),
+            "complete_games": int(totals["cg"]),
+            "shutouts": int(totals["sho"]),
+            "saves": int(totals["sv"]),
+            "innings_pitched": round(innings_pitched, 1),
+            "hits_allowed": int(totals["h"]),
+            "earned_runs": int(totals["er"]),
+            "home_runs_allowed": int(totals["hr"]),
+            "walks": int(totals["bb"]),
+            "strikeouts": int(totals["so"]),
+            "era": round(era, 2),
+            "whip": round(whip, 2)
+        }
+
+        return jsonify({
+            "mode": "combined",
+            "player_type": "pitcher",
+            "totals": result,
+            "photo_url": photo_url
+        })
+
+    else:
+        return jsonify({"error": "Invalid mode"}), 400
+
+
+def handle_hitter_stats(playerid, mode, photo_url, first, last):
+    conn = sqlite3.connect(DB_PATH)
+
+    stats_query = """
+    SELECT yearid, teamid, g, ab, h, hr, rbi, sb, bb, hbp, sf, sh, "2b", "3b"
     FROM lahman_batting WHERE playerid = ?
     """
     df_lahman = pd.read_sql_query(stats_query, conn, params=(playerid,))
     conn.close()
 
-    # Current year live pybaseball stats
     current_year = datetime.date.today().year
-    df_live = batting_stats(current_year)
-    df_live['Name'] = df_live['Name'].str.lower()
-    live_row = df_live[df_live['Name'] == f"{first.lower()} {last.lower()}"]
+    live_row = pd.DataFrame()
+    
+    try:
+        df_live = batting_stats(current_year)
+        df_live['Name'] = df_live['Name'].str.lower()
+        live_row = df_live[df_live['Name'] == f"{first.lower()} {last.lower()}"]
+    except Exception as e:
+        live_row = pd.DataFrame()
 
     if mode == "career":
         if df_lahman.empty:
-            return jsonify({"error": "No stats found"}), 404
+            return jsonify({"error": "No batting stats found"}), 404
 
         totals = df_lahman.agg({
             "g": "sum", "ab": "sum", "h": "sum", "hr": "sum", "rbi": "sum",
             "sb": "sum", "bb": "sum", "hbp": "sum", "sf": "sum", "sh": "sum", "2b": "sum", "3b": "sum"
         }).to_dict()
 
-        # Calculate derived stats
         singles = totals["h"] - totals["2b"] - totals["3b"] - totals["hr"]
         total_bases = singles + 2*totals["2b"] + 3*totals["3b"] + 4*totals["hr"]
         ba = totals["h"] / totals["ab"] if totals["ab"] > 0 else 0
@@ -128,13 +454,10 @@ def get_player_stats():
         slg = total_bases / totals["ab"] if totals["ab"] > 0 else 0
         ops = obp + slg
 
-        # Calculate plate appearances: AB + BB + HBP + SF + SH
         plate_appearances = totals["ab"] + totals["bb"] + totals["hbp"] + totals["sf"] + totals["sh"]
 
-        # Get career WAR from JEFFBAGWELL database
         career_war = get_career_war(playerid)
 
-        # OPS+ from current season (proxy for career)
         ops_plus = 0
         if not live_row.empty:
             live_stats_temp = live_row.iloc[0]
@@ -160,18 +483,17 @@ def get_player_stats():
 
         return jsonify({
             "mode": "career",
+            "player_type": "hitter",
             "totals": result,
             "photo_url": photo_url
         })
 
     elif mode == "season":
         if df_lahman.empty:
-            return jsonify({"error": "No stats found"}), 404
+            return jsonify({"error": "No batting stats found"}), 404
 
-        # Get season WAR history
         df_war_history = get_season_war_history(playerid)
 
-        # Calculate derived stats per season
         df = df_lahman.copy()
         df["singles"] = df["h"] - df["2b"] - df["3b"] - df["hr"]
         df["total_bases"] = df["singles"] + 2*df["2b"] + 3*df["3b"] + 4*df["hr"]
@@ -181,14 +503,12 @@ def get_player_stats():
         df["ops"] = df["obp"] + df["slg"]
         df["pa"] = df["ab"] + df["bb"] + df["hbp"] + df["sf"] + df["sh"]
 
-        # Merge with WAR data
         if not df_war_history.empty:
             df = df.merge(df_war_history, left_on='yearid', right_on='year_ID', how='left')
             df['war'] = df['war'].fillna(0)
         else:
             df['war'] = 0
 
-        # Select columns to return
         df_result = df[[
             "yearid", "teamid", "g", "pa","ab", "h", "hr", "rbi", "sb",
             "bb", "hbp", "sf", "2b", "3b", "ba", "obp", "slg", "ops", "war"
@@ -200,17 +520,17 @@ def get_player_stats():
 
         return jsonify({
             "mode": "season",
+            "player_type": "hitter",
             "stats": df_result.to_dict(orient="records"),
             "photo_url": photo_url
         })
 
     elif mode == "live":
         if live_row.empty:
-            return jsonify({"error": "No live stats found"}), 404
+            return jsonify({"error": "No live batting stats found for current season"}), 404
 
         live_stats = live_row.to_dict(orient="records")[0]
 
-        # Get current season stats including WAR
         war_value = 0
         for war_col in ['WAR', 'war', 'War', 'fWAR', 'bWAR', 'rWAR']:
             if war_col in live_stats and not pd.isna(live_stats[war_col]):
@@ -246,24 +566,22 @@ def get_player_stats():
 
         return jsonify({
             "mode": "live",
+            "player_type": "hitter",
             "stats": result,
             "photo_url": photo_url
         })
 
     elif mode == "combined":
         if df_lahman.empty:
-            return jsonify({"error": "No career stats found"}), 404
+            return jsonify({"error": "No career batting stats found"}), 404
 
-        # Lahman career totals - INCLUDE sh for plate appearances calculation
         totals = df_lahman.agg({
             "g": "sum", "ab": "sum", "h": "sum", "hr": "sum", "rbi": "sum",
             "sb": "sum", "bb": "sum", "hbp": "sum", "sf": "sum", "sh": "sum", "2b": "sum", "3b": "sum"
         }).to_dict()
 
-        # Get career WAR from JEFFBAGWELL database
         career_war = get_career_war(playerid)
 
-        # Add current season stats if available
         current_season_war = 0
         if not live_row.empty:
             live_stats = live_row.to_dict(orient="records")[0]
@@ -276,17 +594,15 @@ def get_player_stats():
             totals["bb"] += int(live_stats.get("BB", 0))
             totals["hbp"] += int(live_stats.get("HBP", 0))
             totals["sf"] += int(live_stats.get("SF", 0))
-            totals["sh"] += int(live_stats.get("SH", 0))  # Add sacrifice hits from live stats
+            totals["sh"] += int(live_stats.get("SH", 0))
             totals["2b"] += int(live_stats.get("2B", 0))
             totals["3b"] += int(live_stats.get("3B", 0))
 
-            # Get current season WAR
             for war_col in ['WAR', 'war', 'War', 'fWAR', 'bWAR', 'rWAR']:
                 if war_col in live_stats and not pd.isna(live_stats[war_col]):
                     current_season_war = float(live_stats[war_col])
                     break
 
-        # Calculate combined stats
         singles = totals["h"] - totals["2b"] - totals["3b"] - totals["hr"]
         total_bases = singles + 2*totals["2b"] + 3*totals["3b"] + 4*totals["hr"]
         ba = totals["h"] / totals["ab"] if totals["ab"] > 0 else 0
@@ -295,13 +611,10 @@ def get_player_stats():
         slg = total_bases / totals["ab"] if totals["ab"] > 0 else 0
         ops = obp + slg
 
-        # Calculate combined plate appearances: AB + BB + HBP + SF + SH
         plate_appearances = totals["ab"] + totals["bb"] + totals["hbp"] + totals["sf"] + totals["sh"]
 
-        # Combined WAR (career + current season)
         combined_war = career_war + current_season_war
 
-        # OPS+ (current season proxy)
         ops_plus = 0
         if not live_row.empty:
             for ops_plus_col in ['OPS+', 'OPS_plus', 'wRC+', 'ops_plus']:
@@ -326,12 +639,17 @@ def get_player_stats():
 
         return jsonify({
             "mode": "combined",
+            "player_type": "hitter",
             "totals": result,
             "photo_url": photo_url
         })
 
     else:
         return jsonify({"error": "Invalid mode"}), 400
+
+
+
+
 
 if __name__ == "__main__":
     app.run(debug=True)
