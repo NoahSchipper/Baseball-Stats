@@ -86,7 +86,236 @@ def detect_player_type(playerid, conn):
     else:
         return "pitcher" if pitch_seasons > 0 else "hitter"
 
+# Add these routes to your existing Flask app
+@app.route('/search-players')
+def search_players():
+    """Search for players with fuzzy matching"""
+    query = request.args.get('q', '').strip()
+    
+    if len(query) < 2:
+        return jsonify([])
+    
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        # Clean the query for better matching
+        query_clean = query.lower().strip()
+        search_term = f"%{query_clean}%"
+        
+        # Search in lahman_people table with multiple matching strategies
+        search_query = """
+        SELECT DISTINCT 
+            namefirst || ' ' || namelast as full_name,
+            playerid,
+            CASE 
+                WHEN LOWER(namefirst || ' ' || namelast) LIKE ? THEN 1
+                WHEN LOWER(namelast) LIKE ? THEN 2
+                WHEN LOWER(namefirst) LIKE ? THEN 3
+                ELSE 4
+            END as priority
+        FROM lahman_people 
+        WHERE LOWER(namefirst || ' ' || namelast) LIKE ?
+           OR LOWER(namelast) LIKE ?
+           OR LOWER(namefirst) LIKE ?
+        ORDER BY priority, namelast, namefirst
+        LIMIT 15
+        """
+        
+        cursor.execute(search_query, (
+            f"{query_clean}%",  # Full name starts with query (highest priority)
+            f"{query_clean}%",  # Last name starts with query
+            f"{query_clean}%",  # First name starts with query  
+            search_term,        # Full name contains query anywhere
+            search_term,        # Last name contains query anywhere
+            search_term         # First name contains query anywhere
+        ))
+        
+        results = cursor.fetchall()
+        conn.close()
+        
+        # Format results - just return player names for simple implementation
+        players = [row[0] for row in results]
+        
+        return jsonify(players)
+        
+    except Exception as e:
+        print(f"Database search failed: {e}")
+        return jsonify([])
 
+@app.route('/search-players-detailed')  
+def search_players_detailed():
+    """Search for players with additional info like debut year and position"""
+    query = request.args.get('q', '').strip()
+    
+    if len(query) < 2:
+        return jsonify([])
+    
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        query_clean = query.lower().strip()
+        search_term = f"%{query_clean}%"
+        
+        # Enhanced search with additional player info
+        search_query = """
+        SELECT DISTINCT 
+            p.namefirst || ' ' || p.namelast as full_name,
+            p.playerid,
+            p.debut,
+            p.finalgame,
+            CASE 
+                WHEN LOWER(p.namefirst || ' ' || p.namelast) LIKE ? THEN 1
+                WHEN LOWER(p.namelast) LIKE ? THEN 2
+                WHEN LOWER(p.namefirst) LIKE ? THEN 3
+                ELSE 4
+            END as priority,
+            -- Try to get primary position from fielding data
+            (SELECT pos FROM lahman_fielding f 
+             WHERE f.playerid = p.playerid 
+             GROUP BY pos 
+             ORDER BY SUM(g) DESC 
+             LIMIT 1) as primary_pos
+        FROM lahman_people p
+        WHERE LOWER(p.namefirst || ' ' || p.namelast) LIKE ?
+           OR LOWER(p.namelast) LIKE ?
+           OR LOWER(p.namefirst) LIKE ?
+        ORDER BY priority, p.namelast, p.namefirst
+        LIMIT 12
+        """
+        
+        cursor.execute(search_query, (
+            f"{query_clean}%", f"{query_clean}%", f"{query_clean}%",
+            search_term, search_term, search_term
+        ))
+        
+        results = cursor.fetchall()
+        conn.close()
+        
+        players = []
+        for row in results:
+            full_name, playerid, debut, final_game, priority, position = row
+            
+            # Format debut year for display
+            debut_year = debut[:4] if debut else "Unknown"
+            final_year = final_game[:4] if final_game else "Present"
+            
+            # Create display string with additional context
+            if position:
+                display_name = f"{full_name} ({position}, {debut_year})"
+            else:
+                display_name = f"{full_name} ({debut_year})"
+            
+            players.append({
+                'name': full_name,
+                'display': display_name,
+                'playerid': playerid,
+                'debut_year': debut_year,
+                'position': position or 'Unknown'
+            })
+        
+        return jsonify(players)
+        
+    except Exception as e:
+        print(f"Detailed search failed: {e}")
+        return jsonify([])
+
+@app.route('/popular-players')
+def popular_players():
+    fallback_players = [
+        "Mike Trout", "Aaron Judge", "Mookie Betts", "Ronald Acuna Jr.",
+        "Juan Soto", "Vladimir Guerrero Jr.", "Fernando Tatis Jr.", 
+        "Gerrit Cole", "Jacob deGrom", "Shane Bieber", "Spencer Strider",
+        "Freddie Freeman", "Manny Machado", "Jose Altuve", "Kyle Tucker"
+    ]
+    return jsonify(fallback_players)
+
+
+# Optional: Add a route to get all unique player names (for advanced frontend caching)
+@app.route('/all-players')
+def all_players():
+    """Get all player names - useful for client-side caching if needed"""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        # Get all players who have batting or pitching stats
+        all_players_query = """
+        SELECT DISTINCT p.namefirst || ' ' || p.namelast as full_name
+        FROM lahman_people p
+        WHERE EXISTS (
+            SELECT 1 FROM lahman_batting b WHERE b.playerid = p.playerid
+        ) OR EXISTS (
+            SELECT 1 FROM lahman_pitching pt WHERE pt.playerid = p.playerid
+        )
+        ORDER BY p.namelast, p.namefirst
+        """
+        
+        cursor.execute(all_players_query)
+        results = cursor.fetchall()
+        conn.close()
+        
+        players = [row[0] for row in results]
+        return jsonify(players)
+        
+    except Exception as e:
+        print(f"All players query failed: {e}")
+        return jsonify([])
+
+# Also add this helper function to improve your existing player lookup
+def improved_player_lookup(name):
+    """Improved player lookup with better fuzzy matching"""
+    if " " not in name:
+        return None
+        
+    first, last = name.split(" ", 1)
+    
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    
+    # Try exact match first
+    exact_query = """
+    SELECT playerid FROM lahman_people
+    WHERE LOWER(namefirst) = ? AND LOWER(namelast) = ?
+    LIMIT 1
+    """
+    cursor.execute(exact_query, (first.lower(), last.lower()))
+    result = cursor.fetchone()
+    
+    if result:
+        conn.close()
+        return result[0]
+    
+    # Try fuzzy matching
+    fuzzy_query = """
+    SELECT playerid, namefirst, namelast,
+           CASE 
+               WHEN LOWER(namelast) = ? THEN 1
+               WHEN LOWER(namefirst) = ? THEN 2  
+               WHEN LOWER(namelast) LIKE ? THEN 3
+               WHEN LOWER(namefirst) LIKE ? THEN 4
+               ELSE 5
+           END as match_quality
+    FROM lahman_people
+    WHERE LOWER(namelast) LIKE ? OR LOWER(namefirst) LIKE ?
+    ORDER BY match_quality
+    LIMIT 1
+    """
+    
+    search_pattern = f"%{last.lower()}%"
+    first_pattern = f"%{first.lower()}%"
+    
+    cursor.execute(fuzzy_query, (
+        last.lower(), first.lower(), 
+        search_pattern, first_pattern,
+        search_pattern, first_pattern
+    ))
+    
+    result = cursor.fetchone()
+    conn.close()
+    
+    return result[0] if result else None
 
 @app.route("/")
 def serve_index():

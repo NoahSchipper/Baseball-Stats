@@ -1,4 +1,4 @@
-// Label maps for different player types
+// Your existing code (keep all of this)
 const hitterLabelMap = {
   war: "WAR",
   games: "G",
@@ -33,7 +33,6 @@ const pitcherLabelMap = {
   whip: "WHIP"
 };
 
-// Season view label maps
 const hitterSeasonLabelMap = {
   war: "WAR",
   games: "G", 
@@ -71,10 +70,8 @@ function extractStats(res) {
   if (res.error) return null;
 
   if (["career", "combined", "live"].includes(res.mode)) {
-    // career and combined use totals; live uses stats object
     return res.totals || res.stats;
   } else if (res.mode === "season") {
-    // array of season objects
     return res.stats;
   }
   return null;
@@ -109,20 +106,18 @@ function updateComparisonTable(resA, resB, nameA, nameB) {
     return;
   }
 
-  // Check if comparing different player types
   if (resA.player_type !== resB.player_type) {
     tbody.innerHTML = `<tr><td colspan='4'>Cannot compare pitcher and hitter statistics.</td></tr>`;
     return;
   }
 
   const mode = resA.mode;
-  const playerType = resA.player_type || "hitter"; // default to hitter for backward compatibility
+  const playerType = resA.player_type || "hitter";
 
   if (["career", "combined", "live"].includes(mode)) {
     const statsA = extractStats(resA);
     const statsB = extractStats(resB);
 
-    // Choose the correct label map based on player type
     const currentLabelMap = playerType === "pitcher" ? pitcherLabelMap : hitterLabelMap;
 
     for (const key of Object.keys(currentLabelMap)) {
@@ -130,9 +125,7 @@ function updateComparisonTable(resA, resB, nameA, nameB) {
       let valA = statsA[key] ?? 0;
       let valB = statsB[key] ?? 0;
 
-      // Format different stats appropriately
       if (playerType === "pitcher") {
-        // Pitcher decimal stats
         const decimalStats = ["war", "era", "whip", "innings_pitched"];
         if (decimalStats.includes(key)) {
           if (key === "war") {
@@ -147,7 +140,6 @@ function updateComparisonTable(resA, resB, nameA, nameB) {
           }
         }
       } else {
-        // Hitter decimal stats
         const decimalStats = ["war", "batting_average", "on_base_percentage", "slugging_percentage", "ops"];
         if (decimalStats.includes(key)) {
           if (key === "war") {
@@ -180,34 +172,29 @@ function updateComparisonTable(resA, resB, nameA, nameB) {
     statsB.forEach(s => years.add(s.year));
 
     let yearsArray = Array.from(years);
-    // Sort by newest or oldest - get the sort order from the dropdown value
     const sortOrder = document.getElementById("viewMode").value;
     if (sortOrder === "oldest") {
       yearsArray.sort((a, b) => a - b);
     } else {
-      yearsArray.sort((a, b) => b - a); // newest first for both "newest" and default
+      yearsArray.sort((a, b) => b - a);
     }
 
-    // Choose the correct season label map based on player type
     const seasonLabelMap = playerType === "pitcher" ? pitcherSeasonLabelMap : hitterSeasonLabelMap;
 
     yearsArray.forEach(year => {
       const playerAStat = statsA.find(s => s.year === year) || {};
       const playerBStat = statsB.find(s => s.year === year) || {};
 
-      // Create year header row
       const yearRow = document.createElement("tr");
       yearRow.innerHTML = `<td colspan="3" style="text-align: center; font-weight: bold; background-color: #f0f0f0; padding: 8px;">${year}</td>`;
       tbody.appendChild(yearRow);
 
-      // Create stats for this year
       for (const key of Object.keys(seasonLabelMap)) {
         const statName = seasonLabelMap[key];
 
         let valA = playerAStat[key] ?? 0;
         let valB = playerBStat[key] ?? 0;
 
-        // Format different stats appropriately based on player type
         if (playerType === "pitcher") {
           const decimalStats = ["war", "era", "whip", "innings_pitched"];
           if (decimalStats.includes(key)) {
@@ -223,7 +210,6 @@ function updateComparisonTable(resA, resB, nameA, nameB) {
             }
           }
         } else {
-          // Hitter formatting
           const decimalStats = ["war", "ba", "obp", "slg", "ops"];
           if (decimalStats.includes(key)) {
             if (key === "war") {
@@ -252,7 +238,6 @@ function updateComparisonTable(resA, resB, nameA, nameB) {
 
 async function fetchStats(name, mode) {
   try {
-    // Map frontend dropdown values to backend expected values
     let backendMode = mode;
     if (mode === "newest" || mode === "oldest") {
       backendMode = "season";
@@ -285,10 +270,191 @@ async function comparePlayers() {
 
 document.getElementById("viewMode").addEventListener("change", comparePlayers);
 
+// ENHANCED AUTO-FILL FUNCTIONALITY STARTS HERE
+let searchTimeout;
+let popularPlayersCache = null;
+const SEARCH_DELAY = 300;
+
+console.log('Enhanced auto-fill script loading...'); // Debug log
+
+async function loadPopularPlayers() {
+  console.log('Loading popular players...'); // Debug log
+  if (popularPlayersCache) {
+    console.log('Using cached popular players');
+    updateDatalistOptions(popularPlayersCache);
+    return;
+  }
+  
+  try {
+    const response = await fetch('/popular-players');
+    console.log('Popular players response:', response.status); // Debug log
+    if (response.ok) {
+      const players = await response.json();
+      console.log('Popular players loaded:', players.length, 'players'); // Debug log
+      popularPlayersCache = players; // Cache the results
+      updateDatalistOptions(players);
+    } else {
+      console.error('Failed to load popular players:', response.status, response.statusText);
+      // Fallback to some basic options
+      const fallback = [
+        "Mike Trout", "Aaron Judge", "Mookie Betts", "Ronald Acuna Jr.",
+        "Juan Soto", "Gerrit Cole", "Jacob deGrom", "Clayton Kershaw",
+        "Vladimir Guerrero Jr.", "Fernando Tatis Jr.", "Shane Bieber", 
+        "Freddie Freeman", "Manny Machado", "Jose Altuve", "Kyle Tucker"
+      ];
+      updateDatalistOptions(fallback);
+    }
+  } catch (error) {
+    console.error('Error loading popular players:', error);
+    // Fallback to basic options
+    const fallback = [
+      "Mike Trout", "Aaron Judge", "Mookie Betts", "Ronald Acuna Jr.",
+      "Juan Soto", "Gerrit Cole", "Jacob deGrom", "Clayton Kershaw"
+    ];
+    updateDatalistOptions(fallback);
+  }
+}
+
+async function searchPlayers(query) {
+  console.log('Searching for:', query); // Debug log
+  try {
+    const response = await fetch(`/search-players?q=${encodeURIComponent(query)}`);
+    console.log('Search response:', response.status); // Debug log
+    if (response.ok) {
+      const players = await response.json();
+      console.log('Search results:', players.length, 'players'); // Debug log
+      updateDatalistOptions(players);
+    } else {
+      console.error('Search failed:', response.status, response.statusText);
+      // Fallback to popular players if search fails
+      if (popularPlayersCache) {
+        updateDatalistOptions(popularPlayersCache);
+      }
+    }
+  } catch (error) {
+    console.error('Search error:', error);
+    // Fallback to popular players if search fails
+    if (popularPlayersCache) {
+      updateDatalistOptions(popularPlayersCache);
+    }
+  }
+}
+
+function updateDatalistOptions(players) {
+  const datalist = document.getElementById('players');
+  console.log('Updating datalist, found element:', !!datalist); // Debug log
+  
+  if (!datalist) {
+    console.error('Datalist element not found!');
+    return;
+  }
+  
+  datalist.innerHTML = '';
+  console.log('Updating datalist with', players.length, 'players'); // Debug log
+  
+  players.forEach(player => {
+    const option = document.createElement('option');
+    if (typeof player === 'string') {
+      option.value = player;
+    } else {
+      option.value = player.name;
+      if (player.display) {
+        option.textContent = player.display;
+      }
+    }
+    datalist.appendChild(option);
+  });
+  
+  console.log('Datalist updated, now has', datalist.children.length, 'options'); // Debug log
+}
+
+function handlePlayerInput(e) {
+  const query = e.target.value.trim();
+  console.log('Input changed:', query); // Debug log
+  
+  if (query.length < 2) {
+    console.log('Query too short, loading popular players'); // Debug log
+    loadPopularPlayers();
+    return;
+  }
+  
+  clearTimeout(searchTimeout);
+  searchTimeout = setTimeout(() => {
+    searchPlayers(query);
+  }, SEARCH_DELAY);
+}
+
+function handlePlayerClick(e) {
+  console.log('Input clicked, forcing suggestion list...');
+  
+  loadPopularPlayers(); // make sure the list is up-to-date
+
+  // Temporarily set a space to trigger suggestions
+  e.target.value = " ";
+  e.target.dispatchEvent(new Event('input', { bubbles: true }));
+
+  // Wait a little before clearing it so dropdown stays open
+  setTimeout(() => {
+    e.target.value = "";
+  }, 300); // 300ms works well in Chrome/Edge
+}
+
+
+function handlePlayerFocus(e) {
+  console.log('Input focused'); // Debug log
+  const query = e.target.value.trim();
+  
+  if (query.length < 2) {
+    // Show popular players when focused and no/short query
+    loadPopularPlayers();
+  }
+  // If there's already a longer query, keep current suggestions
+}
+
+function setupPlayerAutofill() {
+  console.log('Setting up enhanced autofill...'); // Debug log
+  
+  const playerAInput = document.getElementById('playerA');
+  const playerBInput = document.getElementById('playerB');
+  
+  console.log('Found inputs:', !!playerAInput, !!playerBInput); // Debug log
+  
+  if (playerAInput) {
+    playerAInput.addEventListener('input', handlePlayerInput);
+    playerAInput.addEventListener('click', handlePlayerClick);
+    playerAInput.addEventListener('focus', handlePlayerFocus);
+    console.log('Added event listeners to playerA'); // Debug log
+  } else {
+    console.error('playerA input not found!');
+  }
+  
+  if (playerBInput) {
+    playerBInput.addEventListener('input', handlePlayerInput);
+    playerBInput.addEventListener('click', handlePlayerClick);
+    playerBInput.addEventListener('focus', handlePlayerFocus);
+    console.log('Added event listeners to playerB'); // Debug log
+  } else {
+    console.error('playerB input not found!');
+  }
+  
+  // Load popular players initially and cache them
+  loadPopularPlayers();
+}
+
+// Updated DOMContentLoaded event listener
 document.addEventListener("DOMContentLoaded", () => {
-  // Default to comparing a hitter and pitcher to test the functionality
-  document.getElementById("playerA").value = "Mike Trout";
+  console.log('DOM loaded, initializing enhanced autofill...'); // Debug log
+  
+  // Your existing code
+  document.getElementById("playerA").value = "Kyle Schwarber";
   document.getElementById("playerB").value = "Kyle Tucker";
   document.getElementById("viewMode").value = "combined";
+  
+  // Initialize enhanced autofill
+  setupPlayerAutofill();
+  
+  // Your existing comparison call
   comparePlayers();
+  
+  console.log('Enhanced initialization complete'); // Debug log
 });

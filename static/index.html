@@ -11,11 +11,11 @@
 
       <div class="input-row">
         <label>
-          Player A: <input type="text" id="playerA" placeholder="Mike Trout" />
+          Player A: <input type="text" id="playerA" list="players" placeholder="Kyle Schwarber" />
         </label>
         <label>
           Player B:
-          <input type="text" id="playerB" placeholder="Mookie Betts" />
+          <input type="text" id="playerB" list="players" placeholder="Kyle Tucker" />
         </label>
 
         <select id="viewMode">
@@ -28,6 +28,10 @@
 
         <button onclick="comparePlayers()">Compare</button>
       </div>
+
+      <datalist id="players">
+
+      </datalist>
 
       <table id="comparisonTable" border="1" cellspacing="0" cellpadding="5">
         <thead>
