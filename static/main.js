@@ -411,6 +411,13 @@ function handlePlayerFocus(e) {
   // If there's already a longer query, keep current suggestions
 }
 
+function handleEnterKey(e) {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    comparePlayers();
+  }
+}
+
 function setupPlayerAutofill() {
   console.log('Setting up enhanced autofill...'); // Debug log
   
@@ -423,6 +430,7 @@ function setupPlayerAutofill() {
     playerAInput.addEventListener('input', handlePlayerInput);
     playerAInput.addEventListener('click', handlePlayerClick);
     playerAInput.addEventListener('focus', handlePlayerFocus);
+    playerAInput.addEventListener('keydown', handleEnterKey);
     console.log('Added event listeners to playerA'); // Debug log
   } else {
     console.error('playerA input not found!');
@@ -432,6 +440,7 @@ function setupPlayerAutofill() {
     playerBInput.addEventListener('input', handlePlayerInput);
     playerBInput.addEventListener('click', handlePlayerClick);
     playerBInput.addEventListener('focus', handlePlayerFocus);
+    playerBInput.addEventListener('keydown', handleEnterKey);
     console.log('Added event listeners to playerB'); // Debug log
   } else {
     console.error('playerB input not found!');
