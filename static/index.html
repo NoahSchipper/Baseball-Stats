@@ -11,27 +11,30 @@
 
       <div class="input-row">
         <label>
-          Player A: <input type="text" id="playerA" list="players" placeholder="Kyle Schwarber" />
+          Player A: 
+          <div class="input-container">
+            <input type="text" id="playerA" placeholder="Kyle Schwarber" autocomplete="off" />
+            <div id="dropdownA" class="dropdown"></div>
+          </div>
         </label>
         <label>
           Player B:
-          <input type="text" id="playerB" list="players" placeholder="Kyle Tucker" />
+          <div class="input-container">
+            <input type="text" id="playerB" placeholder="Kyle Tucker" autocomplete="off" />
+            <div id="dropdownB" class="dropdown"></div>
+          </div>
         </label>
 
         <select id="viewMode">
-          <option value="career">Career Totals (Through 2024)</option>
           <option value="combined">Career + Current Season</option>
+          <option value="live">Current Season Only (Live Stats)</option>
+          <option value="career">Career Totals (Through 2024)</option>
           <option value="newest">Season-by-Season (Newest First)</option>
           <option value="oldest">Season-by-Season (Oldest First)</option>
-          <option value="live">Current Season Only (Live Stats)</option>
         </select>
 
         <button onclick="comparePlayers()">Compare</button>
       </div>
-
-      <datalist id="players">
-
-      </datalist>
 
       <table id="comparisonTable" border="1" cellspacing="0" cellpadding="5">
         <thead>

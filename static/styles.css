@@ -124,6 +124,254 @@ td {
   white-space: nowrap;
 }
 
+/* Enhanced suggestion styling with disambiguation */
+.suggestion-item {
+    padding: 12px 16px;
+    border-bottom: 1px solid #eee;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.suggestion-item:hover {
+    background-color: #f8f9fa;
+}
+
+.suggestion-item:last-child {
+    border-bottom: none;
+}
+
+.player-name {
+    font-weight: 500;
+    font-size: 14px;
+    color: #333;
+    margin-bottom: 2px;
+}
+
+.disambiguation-note {
+    font-size: 12px;
+    color: #666;
+    font-style: italic;
+}
+
+.suggestion-item.error {
+    color: #dc3545;
+    cursor: default;
+}
+
+.suggestion-item.error:hover {
+    background-color: transparent;
+}
+
+/* Modal styles for disambiguation */
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    animation: fadeIn 0.3s ease;
+}
+
+/* Add these styles to your existing styles.css */
+
+.input-container {
+  position: relative;
+  display: inline-block;
+}
+
+.dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: white;
+  border: 1px solid #ccc;
+  border-top: none;
+  border-radius: 0 0 4px 4px;
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 1000;
+  display: none;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+}
+
+.dropdown.show {
+  display: block;
+}
+
+.dropdown-item {
+  padding: 8px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid #f0f0f0;
+  transition: background-color 0.2s;
+  font-size: 14px;
+}
+
+.dropdown-item:hover,
+.dropdown-item.highlighted {
+  background-color: #f8f9fa;
+}
+
+.dropdown-item:last-child {
+  border-bottom: none;
+}
+
+.dropdown-item .player-years {
+  color: #666;
+  font-size: 12px;
+  margin-left: 8px;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+.modal-content {
+    background-color: #fff;
+    margin: 15% auto;
+    padding: 24px;
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    width: 90%;
+    max-width: 500px;
+    animation: slideIn 0.3s ease;
+}
+
+@keyframes slideIn {
+    from { 
+        transform: translateY(-50px);
+        opacity: 0;
+    }
+    to { 
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+.modal-content h3 {
+    margin-top: 0;
+    margin-bottom: 16px;
+    color: #333;
+    font-size: 20px;
+}
+
+.modal-content p {
+    margin-bottom: 20px;
+    color: #666;
+    line-height: 1.5;
+}
+
+.player-options {
+    margin-bottom: 24px;
+}
+
+.player-option {
+    padding: 16px;
+    border: 2px solid #e9ecef;
+    border-radius: 6px;
+    margin-bottom: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.player-option:hover {
+    border-color: #007bff;
+    background-color: #f8f9ff;
+}
+
+.player-option:last-child {
+    margin-bottom: 0;
+}
+
+.player-details strong {
+    display: block;
+    font-size: 16px;
+    color: #333;
+    margin-bottom: 4px;
+}
+
+.player-meta {
+    font-size: 13px;
+    color: #666;
+}
+
+.modal-close {
+    background-color: #6c757d;
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: background-color 0.2s ease;
+}
+
+.modal-close:hover {
+    background-color: #5a6268;
+}
+
+/* Enhanced search input styling */
+#player-search {
+    position: relative;
+    padding: 12px 16px;
+    font-size: 16px;
+    border: 2px solid #ddd;
+    border-radius: 6px;
+    width: 100%;
+    max-width: 400px;
+    transition: border-color 0.2s ease;
+}
+
+#player-search:focus {
+    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+}
+
+#suggestions {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: white;
+    border: 1px solid #ddd;
+    border-top: none;
+    border-radius: 0 0 6px 6px;
+    max-height: 300px;
+    overflow-y: auto;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    z-index: 100;
+}
+
+/* Search container */
+.search-container {
+    position: relative;
+    display: inline-block;
+    width: 100%;
+    max-width: 400px;
+}
+
+/* Responsive design */
+@media (max-width: 768px) {
+    .modal-content {
+        margin: 10% auto;
+        width: 95%;
+        padding: 20px;
+    }
+    
+    .player-option {
+        padding: 12px;
+    }
+    
+    .modal-content h3 {
+        font-size: 18px;
+    }
+}
+
 @media (max-width: 600px) {
   table, thead, tbody, th, td, tr {
     display: block;

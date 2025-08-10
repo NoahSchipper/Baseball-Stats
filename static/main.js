@@ -1,4 +1,4 @@
-// Your existing code (keep all of this)
+// Your existing label maps and stats extraction (keep all of this)
 const hitterLabelMap = {
   war: "WAR",
   games: "G",
@@ -64,6 +64,18 @@ const pitcherSeasonLabelMap = {
   strikeouts: "SO",
   era: "ERA",
   whip: "WHIP"
+};
+
+// Common father/son player mappings for quick reference
+const COMMON_FATHER_SON_PLAYERS = {
+  'ken griffey': ['Ken Griffey Sr.', 'Ken Griffey Jr.'],
+  'fernando tatis': ['Fernando Tatis Sr.', 'Fernando Tatis Jr.'],
+  'cal ripken': ['Cal Ripken Sr.', 'Cal Ripken Jr.'],
+  'bobby bonds': ['Bobby Bonds', 'Barry Bonds'],
+  'cecil fielder': ['Cecil Fielder', 'Prince Fielder'],
+  'tim raines': ['Tim Raines Sr.', 'Tim Raines Jr.'],
+  'sandy alomar': ['Sandy Alomar Sr.', 'Sandy Alomar Jr.'],
+  'pete rose': ['Pete Rose Sr.', 'Pete Rose Jr.']
 };
 
 function extractStats(res) {
@@ -236,6 +248,7 @@ function updateComparisonTable(resA, resB, nameA, nameB) {
   }
 }
 
+// ENHANCED FETCH WITH DISAMBIGUATION HANDLING
 async function fetchStats(name, mode) {
   try {
     let backendMode = mode;
@@ -243,11 +256,143 @@ async function fetchStats(name, mode) {
       backendMode = "season";
     }
     
-    const res = await fetch(`/player?name=${encodeURIComponent(name)}&mode=${backendMode}`);
-    return await res.json();
+    // Try the enhanced endpoint first
+    const response = await fetch(`/player-disambiguate?name=${encodeURIComponent(name)}&mode=${backendMode}`);
+    
+    if (response.status === 422) {
+      // Multiple players found - handle disambiguation
+      const data = await response.json();
+      return await handleDisambiguation(name, data.suggestions, backendMode);
+    }
+    
+    if (response.ok) {
+      return await response.json();
+    }
+    
+    // Fallback to original endpoint
+    const fallbackResponse = await fetch(`/player?name=${encodeURIComponent(name)}&mode=${backendMode}`);
+    return await fallbackResponse.json();
+    
   } catch (e) {
+    console.error('Fetch error:', e);
     return { error: "Failed to fetch data" };
   }
+}
+
+async function handleDisambiguation(originalName, suggestions, mode) {
+  return new Promise((resolve) => {
+    showDisambiguationModal(suggestions, originalName, resolve, mode);
+  });
+}
+
+function showDisambiguationModal(suggestions, originalName, callback, mode) {
+  // Remove any existing modal
+  const existingModal = document.getElementById('disambiguation-modal');
+  if (existingModal) {
+    existingModal.remove();
+  }
+  
+  const modal = document.createElement('div');
+  modal.id = 'disambiguation-modal';
+  modal.className = 'modal';
+  modal.style.cssText = `
+    display: block;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.5);
+  `;
+  
+  const cleanName = originalName.split(' Jr.')[0].split(' Sr.')[0];
+  
+  const html = `
+    <div class="modal-content" style="
+      background-color: #fff;
+      margin: 15% auto;
+      padding: 24px;
+      border-radius: 8px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+      width: 90%;
+      max-width: 500px;
+    ">
+      <h3 style="margin-top: 0; margin-bottom: 16px; color: #333; font-size: 20px;">
+        Multiple Players Found
+      </h3>
+      <p style="margin-bottom: 20px; color: #666; line-height: 1.5;">
+        Found multiple players named "${cleanName}". Please select which player:
+      </p>
+      <div class="player-options" style="margin-bottom: 24px;">
+        ${suggestions.map(player => `
+          <div class="player-option" data-name="${player.name}" style="
+            padding: 16px;
+            border: 2px solid #e9ecef;
+            border-radius: 6px;
+            margin-bottom: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+          " onmouseover="this.style.borderColor='#007bff'; this.style.backgroundColor='#f8f9ff';" 
+             onmouseout="this.style.borderColor='#e9ecef'; this.style.backgroundColor='white';">
+            <div class="player-details">
+              <strong style="display: block; font-size: 16px; color: #333; margin-bottom: 4px;">
+                ${player.name}
+              </strong>
+              <div class="player-meta" style="font-size: 13px; color: #666;">
+                Debut: ${player.debut_year} | Born: ${player.birth_year}
+              </div>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+      <button class="modal-close" style="
+        background-color: #6c757d;
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+      " onmouseover="this.style.backgroundColor='#5a6268';" 
+         onmouseout="this.style.backgroundColor='#6c757d';">
+        Cancel
+      </button>
+    </div>
+  `;
+  
+  modal.innerHTML = html;
+  document.body.appendChild(modal);
+  
+  // Add event handlers
+  modal.querySelectorAll('.player-option').forEach(option => {
+    option.addEventListener('click', async function() {
+      const selectedName = this.dataset.name;
+      modal.remove();
+      
+      // Fetch stats for selected player
+      try {
+        const response = await fetch(`/player-disambiguate?name=${encodeURIComponent(selectedName)}&mode=${mode}`);
+        const result = await response.json();
+        callback(result);
+      } catch (error) {
+        callback({ error: "Failed to fetch selected player data" });
+      }
+    });
+  });
+  
+  modal.querySelector('.modal-close').addEventListener('click', function() {
+    modal.remove();
+    callback({ error: "User cancelled disambiguation" });
+  });
+  
+  // Close modal when clicking outside
+  modal.addEventListener('click', function(e) {
+    if (e.target === modal) {
+      modal.remove();
+      callback({ error: "User cancelled disambiguation" });
+    }
+  });
 }
 
 async function comparePlayers() {
@@ -260,6 +405,13 @@ async function comparePlayers() {
     return;
   }
 
+  // Hide any open dropdowns
+  hideAllDropdowns();
+
+  // Show loading indicator
+  const tbody = document.getElementById("comparisonBody");
+  tbody.innerHTML = `<tr><td colspan='4' style='text-align: center; padding: 20px;'>Loading player data...</td></tr>`;
+
   const [resA, resB] = await Promise.all([
     fetchStats(nameA, mode),
     fetchStats(nameB, mode),
@@ -270,170 +422,202 @@ async function comparePlayers() {
 
 document.getElementById("viewMode").addEventListener("change", comparePlayers);
 
-// ENHANCED AUTO-FILL FUNCTIONALITY STARTS HERE
+// CUSTOM DROPDOWN FUNCTIONALITY
 let searchTimeout;
 let popularPlayersCache = null;
+let currentDropdown = null;
 const SEARCH_DELAY = 300;
 
-console.log('Enhanced auto-fill script loading...'); // Debug log
+// Show dropdown with players
+function showDropdown(inputId, players) {
+  const dropdownId = inputId === 'playerA' ? 'dropdownA' : 'dropdownB';
+  const dropdown = document.getElementById(dropdownId);
+  
+  // Hide other dropdowns first
+  hideAllDropdowns();
+  
+  dropdown.innerHTML = '';
+  
+  if (!players || players.length === 0) {
+    dropdown.innerHTML = '<div class="dropdown-item" style="color: #999; cursor: default;">No players found</div>';
+  } else {
+    players.forEach(player => {
+      const item = document.createElement('div');
+      item.className = 'dropdown-item';
+      
+      if (typeof player === 'string') {
+        item.textContent = player;
+        item.dataset.value = player;
+      } else {
+        const name = player.name || player.display;
+        const display = player.display || player.name;
+        
+        item.innerHTML = `${name}${display !== name ? `<span class="player-years">${display}</span>` : ''}`;
+        item.dataset.value = name;
+      }
+      
+      item.addEventListener('click', () => {
+        document.getElementById(inputId).value = item.dataset.value;
+        hideDropdown(dropdownId);
+        // Auto-compare if both fields are filled
+        const otherInput = inputId === 'playerA' ? 'playerB' : 'playerA';
+        if (document.getElementById(otherInput).value.trim()) {
+          comparePlayers();
+        }
+      });
+      
+      dropdown.appendChild(item);
+    });
+  }
+  
+  dropdown.classList.add('show');
+  currentDropdown = dropdownId;
+}
 
-async function loadPopularPlayers() {
-  console.log('Loading popular players...'); // Debug log
+// Hide specific dropdown
+function hideDropdown(dropdownId) {
+  const dropdown = document.getElementById(dropdownId);
+  dropdown.classList.remove('show');
+  if (currentDropdown === dropdownId) {
+    currentDropdown = null;
+  }
+}
+
+// Hide all dropdowns
+function hideAllDropdowns() {
+  ['dropdownA', 'dropdownB'].forEach(id => {
+    const dropdown = document.getElementById(id);
+    if (dropdown) {
+      dropdown.classList.remove('show');
+    }
+  });
+  currentDropdown = null;
+}
+
+// Load popular players
+async function loadPopularPlayers(inputId) {
   if (popularPlayersCache) {
-    console.log('Using cached popular players');
-    updateDatalistOptions(popularPlayersCache);
+    showDropdown(inputId, popularPlayersCache);
     return;
   }
   
   try {
     const response = await fetch('/popular-players');
-    console.log('Popular players response:', response.status); // Debug log
     if (response.ok) {
       const players = await response.json();
-      console.log('Popular players loaded:', players.length, 'players'); // Debug log
-      popularPlayersCache = players; // Cache the results
-      updateDatalistOptions(players);
+      popularPlayersCache = players;
+      showDropdown(inputId, players);
     } else {
-      console.error('Failed to load popular players:', response.status, response.statusText);
-      // Fallback to some basic options
       const fallback = [
-        "Mike Trout", "Aaron Judge", "Mookie Betts", "Ronald Acuna Jr.",
+        "Mike Trout", "Aaron Judge", "Mookie Betts", "Ronald Acuña",
         "Juan Soto", "Gerrit Cole", "Jacob deGrom", "Clayton Kershaw",
         "Vladimir Guerrero Jr.", "Fernando Tatis Jr.", "Shane Bieber", 
         "Freddie Freeman", "Manny Machado", "Jose Altuve", "Kyle Tucker"
       ];
-      updateDatalistOptions(fallback);
+      showDropdown(inputId, fallback);
     }
   } catch (error) {
     console.error('Error loading popular players:', error);
-    // Fallback to basic options
     const fallback = [
-      "Mike Trout", "Aaron Judge", "Mookie Betts", "Ronald Acuna Jr.",
+      "Mike Trout", "Aaron Judge", "Mookie Betts", "Ronald Acuña",
       "Juan Soto", "Gerrit Cole", "Jacob deGrom", "Clayton Kershaw"
     ];
-    updateDatalistOptions(fallback);
+    showDropdown(inputId, fallback);
   }
 }
 
-async function searchPlayers(query) {
-  console.log('Searching for:', query); // Debug log
+// Search players
+async function searchPlayersEnhanced(query, inputId) {
   try {
-    const response = await fetch(`/search-players?q=${encodeURIComponent(query)}`);
-    console.log('Search response:', response.status); // Debug log
+    const response = await fetch(`/search-players-enhanced?q=${encodeURIComponent(query)}`);
     if (response.ok) {
       const players = await response.json();
-      console.log('Search results:', players.length, 'players'); // Debug log
-      updateDatalistOptions(players);
+      const formattedPlayers = players.map(player => ({
+        name: player.original_name || player.name,
+        display: player.display
+      }));
+      showDropdown(inputId, formattedPlayers);
     } else {
-      console.error('Search failed:', response.status, response.statusText);
-      // Fallback to popular players if search fails
-      if (popularPlayersCache) {
-        updateDatalistOptions(popularPlayersCache);
+      const fallbackResponse = await fetch(`/search-players?q=${encodeURIComponent(query)}`);
+      if (fallbackResponse.ok) {
+        const players = await fallbackResponse.json();
+        showDropdown(inputId, players);
       }
     }
   } catch (error) {
-    console.error('Search error:', error);
-    // Fallback to popular players if search fails
+    console.error('Enhanced search error:', error);
     if (popularPlayersCache) {
-      updateDatalistOptions(popularPlayersCache);
+      showDropdown(inputId, popularPlayersCache);
     }
   }
 }
 
-function updateDatalistOptions(players) {
-  const datalist = document.getElementById('players');
-  console.log('Updating datalist, found element:', !!datalist); // Debug log
-  
-  if (!datalist) {
-    console.error('Datalist element not found!');
-    return;
-  }
-  
-  datalist.innerHTML = '';
-  console.log('Updating datalist with', players.length, 'players'); // Debug log
-  
-  players.forEach(player => {
-    const option = document.createElement('option');
-    if (typeof player === 'string') {
-      option.value = player;
-    } else {
-      option.value = player.name;
-      if (player.display) {
-        option.textContent = player.display;
-      }
-    }
-    datalist.appendChild(option);
-  });
-  
-  console.log('Datalist updated, now has', datalist.children.length, 'options'); // Debug log
-}
-
+// Input event handler
 function handlePlayerInput(e) {
   const query = e.target.value.trim();
-  console.log('Input changed:', query); // Debug log
+  const inputId = e.target.id;
+  
+  clearTimeout(searchTimeout);
   
   if (query.length < 2) {
-    console.log('Query too short, loading popular players'); // Debug log
-    loadPopularPlayers();
+    searchTimeout = setTimeout(() => {
+      loadPopularPlayers(inputId);
+    }, 100);
     return;
   }
   
-  clearTimeout(searchTimeout);
   searchTimeout = setTimeout(() => {
-    searchPlayers(query);
+    searchPlayersEnhanced(query, inputId);
   }, SEARCH_DELAY);
 }
 
+// Click event handler
 function handlePlayerClick(e) {
-  console.log('Input clicked, forcing suggestion list...');
-  
-  loadPopularPlayers(); // make sure the list is up-to-date
-
-  // Temporarily set a space to trigger suggestions
-  e.target.value = " ";
-  e.target.dispatchEvent(new Event('input', { bubbles: true }));
-
-  // Wait a little before clearing it so dropdown stays open
-  setTimeout(() => {
-    e.target.value = "";
-  }, 300); // 300ms works well in Chrome/Edge
-}
-
-
-function handlePlayerFocus(e) {
-  console.log('Input focused'); // Debug log
+  const inputId = e.target.id;
   const query = e.target.value.trim();
   
   if (query.length < 2) {
-    // Show popular players when focused and no/short query
-    loadPopularPlayers();
+    loadPopularPlayers(inputId);
+  } else {
+    searchPlayersEnhanced(query, inputId);
   }
-  // If there's already a longer query, keep current suggestions
 }
 
+// Focus event handler
+function handlePlayerFocus(e) {
+  const inputId = e.target.id;
+  const query = e.target.value.trim();
+  
+  if (query.length < 2) {
+    loadPopularPlayers(inputId);
+  } else {
+    searchPlayersEnhanced(query, inputId);
+  }
+}
+
+// Handle keyboard navigation
 function handleEnterKey(e) {
   if (e.key === 'Enter') {
     e.preventDefault();
+    const dropdownId = e.target.id === 'playerA' ? 'dropdownA' : 'dropdownB';
+    hideDropdown(dropdownId);
     comparePlayers();
+  } else if (e.key === 'Escape') {
+    const dropdownId = e.target.id === 'playerA' ? 'dropdownA' : 'dropdownB';
+    hideDropdown(dropdownId);
   }
 }
 
+// Setup event listeners
 function setupPlayerAutofill() {
-  console.log('Setting up enhanced autofill...'); // Debug log
-  
   const playerAInput = document.getElementById('playerA');
   const playerBInput = document.getElementById('playerB');
-  
-  console.log('Found inputs:', !!playerAInput, !!playerBInput); // Debug log
   
   if (playerAInput) {
     playerAInput.addEventListener('input', handlePlayerInput);
     playerAInput.addEventListener('click', handlePlayerClick);
     playerAInput.addEventListener('focus', handlePlayerFocus);
     playerAInput.addEventListener('keydown', handleEnterKey);
-    console.log('Added event listeners to playerA'); // Debug log
-  } else {
-    console.error('playerA input not found!');
   }
   
   if (playerBInput) {
@@ -441,29 +625,26 @@ function setupPlayerAutofill() {
     playerBInput.addEventListener('click', handlePlayerClick);
     playerBInput.addEventListener('focus', handlePlayerFocus);
     playerBInput.addEventListener('keydown', handleEnterKey);
-    console.log('Added event listeners to playerB'); // Debug log
-  } else {
-    console.error('playerB input not found!');
   }
   
-  // Load popular players initially and cache them
-  loadPopularPlayers();
+  // Hide dropdown when clicking outside
+  document.addEventListener('click', (e) => {
+    if (currentDropdown && !e.target.closest('.input-container')) {
+      hideAllDropdowns();
+    }
+  });
 }
 
-// Updated DOMContentLoaded event listener
+// Initialize everything when DOM is ready
 document.addEventListener("DOMContentLoaded", () => {
-  console.log('DOM loaded, initializing enhanced autofill...'); // Debug log
-  
-  // Your existing code
+  // Set default values
   document.getElementById("playerA").value = "Kyle Schwarber";
   document.getElementById("playerB").value = "Kyle Tucker";
   document.getElementById("viewMode").value = "combined";
   
-  // Initialize enhanced autofill
+  // Initialize custom dropdown functionality
   setupPlayerAutofill();
   
-  // Your existing comparison call
+  // Run initial comparison
   comparePlayers();
-  
-  console.log('Enhanced initialization complete'); // Debug log
 });
