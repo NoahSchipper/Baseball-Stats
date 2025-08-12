@@ -111,62 +111,6 @@ def detect_player_type(playerid, conn):
         return "hitter"
     else:
         return "pitcher" if pitch_seasons > 0 else "hitter"
-'''
-def detect_two_way_player(playerid, conn):
-    """Detect if player is a significant two-way player (both pitcher and hitter)"""
-    cursor = conn.cursor()
-    
-    # Get pitching stats
-    pitching_query = """
-    SELECT COUNT(*) as pitch_seasons, SUM(g) as total_games_pitched, 
-           SUM(gs) as total_starts, SUM(ipouts) as total_outs
-    FROM lahman_pitching WHERE playerid = ?
-    """
-    cursor.execute(pitching_query, (playerid,))
-    pitch_result = cursor.fetchone()
-    
-    # Get batting stats  
-    batting_query = """
-    SELECT COUNT(*) as bat_seasons, SUM(g) as total_games_batted, 
-           SUM(ab) as total_at_bats, SUM(h) as total_hits
-    FROM lahman_batting WHERE playerid = ?
-    """
-    cursor.execute(batting_query, (playerid,))
-    bat_result = cursor.fetchone()
-    
-    pitch_seasons = pitch_result[0] if pitch_result else 0
-    total_games_pitched = pitch_result[1] if pitch_result and pitch_result[1] else 0
-    total_starts = pitch_result[2] if pitch_result and pitch_result[2] else 0
-    total_innings = (pitch_result[3] or 0) / 3.0
-    
-    bat_seasons = bat_result[0] if bat_result else 0
-    total_games_batted = bat_result[1] if bat_result and bat_result[1] else 0
-    total_at_bats = bat_result[2] if bat_result and bat_result[2] else 0
-    total_hits = bat_result[3] if bat_result and bat_result[3] else 0
-    
-    # Define thresholds for significant two-way players
-    significant_pitcher = (
-        pitch_seasons >= 3 or 
-        total_games_pitched >= 50 or 
-        total_starts >= 10 or
-        total_innings >= 100
-    )
-    
-    significant_hitter = (
-        bat_seasons >= 3 or 
-        total_at_bats >= 500 or
-        total_hits >= 100
-    )
-    
-    if significant_pitcher and significant_hitter:
-        return "two-way"
-    elif significant_pitcher:
-        return "pitcher"
-    elif significant_hitter:
-        return "hitter"
-    else:
-        return "pitcher" if pitch_seasons > 0 else "hitter"
-        ''' 
 
 # Add this new route for two-way player handling
 @app.route("/player-two-way")
