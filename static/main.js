@@ -248,35 +248,175 @@ function updateComparisonTable(resA, resB, nameA, nameB) {
   }
 }
 
-// ENHANCED FETCH WITH DISAMBIGUATION HANDLING
-async function fetchStats(name, mode) {
+// ENHANCED FETCH WITH DISAMBIGUATION AND TWO-WAY HANDLING
+async function fetchStats(name, mode, playerType = null) {
   try {
     let backendMode = mode;
     if (mode === "newest" || mode === "oldest") {
       backendMode = "season";
     }
     
-    // Try the enhanced endpoint first
-    const response = await fetch(`/player-disambiguate?name=${encodeURIComponent(name)}&mode=${backendMode}`);
+    // Build URL with player_type parameter if specified
+    let url = `/player-two-way?name=${encodeURIComponent(name)}&mode=${backendMode}`;
+    if (playerType) {
+      url += `&player_type=${playerType}`;
+    }
+
+    // Use the two-way endpoint instead of disambiguate
+    const response = await fetch(url);
     
     if (response.status === 422) {
       // Multiple players found - handle disambiguation
       const data = await response.json();
       return await handleDisambiguation(name, data.suggestions, backendMode);
     }
+
+    if (response.status === 423) {
+      // Two-way player found - handle player type selection
+      const data = await response.json();
+      return await handleTwoWayPlayerSelection(name, data.options, backendMode);
+    }
     
     if (response.ok) {
       return await response.json();
     }
     
-    // Fallback to original endpoint
-    const fallbackResponse = await fetch(`/player?name=${encodeURIComponent(name)}&mode=${backendMode}`);
-    return await fallbackResponse.json();
+    // If 404 or other error, try the disambiguate endpoint
+    const fallbackUrl = `/player-disambiguate?name=${encodeURIComponent(name)}&mode=${backendMode}`;
+    const fallbackResponse = await fetch(fallbackUrl);
+    
+    if (fallbackResponse.status === 422) {
+      const data = await fallbackResponse.json();
+      return await handleDisambiguation(name, data.suggestions, backendMode);
+    }
+    
+    if (fallbackResponse.ok) {
+      return await fallbackResponse.json();
+    }
+    
+    // Final fallback to original endpoint
+    const originalResponse = await fetch(`/player?name=${encodeURIComponent(name)}&mode=${backendMode}`);
+    return await originalResponse.json();
     
   } catch (e) {
     console.error('Fetch error:', e);
     return { error: "Failed to fetch data" };
   }
+}
+
+async function handleTwoWayPlayerSelection(originalName, options, mode) {
+  return new Promise((resolve) => {
+    showTwoWaySelectionModal(options, originalName, resolve, mode);
+  });
+}
+
+function showTwoWaySelectionModal(options, originalName, callback, mode) {
+  // Remove any existing modal
+  const existingModal = document.getElementById('two-way-modal');
+  if (existingModal) {
+    existingModal.remove();
+  }
+
+  const modal = document.createElement('div');
+  modal.id = 'two-way-modal';
+  modal.className = 'modal';
+  modal.style.cssText = `
+    display: block;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.5);
+  `;
+
+  const html = `
+    <div class="modal-content" style="
+      background-color: #fff;
+      margin: 15% auto;
+      padding: 24px;
+      border-radius: 8px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+      width: 90%;
+      max-width: 500px;
+    ">
+      <h3 style="margin-top: 0; margin-bottom: 16px; color: #333; font-size: 20px;">
+        Two-Way Player Detected
+      </h3>
+      <p style="margin-bottom: 20px; color: #666; line-height: 1.5;">
+        ${originalName} was both a significant pitcher and hitter. Please select which stats to display:
+      </p>
+      <div class="player-type-options" style="margin-bottom: 24px;">
+        ${options.map(option => `
+          <div class="player-type-option" data-type="${option.type}" style="
+            padding: 16px;
+            border: 2px solid #e9ecef;
+            border-radius: 6px;
+            margin-bottom: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            text-align: center;
+          " onmouseover="this.style.borderColor='#007bff'; this.style.backgroundColor='#f8f9ff';" 
+             onmouseout="this.style.borderColor='#e9ecef'; this.style.backgroundColor='white';">
+            <div class="option-content">
+              <strong style="display: block; font-size: 16px; color: #333; margin-bottom: 4px;">
+                ${option.label}
+              </strong>
+              <div style="font-size: 13px; color: #666;">
+                ${option.type === 'pitcher' ? 'Wins, Losses, ERA, Strikeouts, etc.' : 'Batting Average, Home Runs, RBIs, etc.'}
+              </div>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+      <button class="modal-close" style="
+        background-color: #6c757d;
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 14px;
+      " onmouseover="this.style.backgroundColor='#5a6268';" 
+         onmouseout="this.style.backgroundColor='#6c757d';">
+        Cancel
+      </button>
+    </div>
+  `;
+  
+  modal.innerHTML = html;
+  document.body.appendChild(modal);
+  
+  // Add event handlers
+  modal.querySelectorAll('.player-type-option').forEach(option => {
+    option.addEventListener('click', async function() {
+      const selectedType = this.dataset.type;
+      modal.remove();
+      
+      // Fetch stats for selected player type using the two-way endpoint
+      try {
+        const response = await fetch(`/player-two-way?name=${encodeURIComponent(originalName)}&mode=${mode}&player_type=${selectedType}`);
+        const result = await response.json();
+        callback(result);
+      } catch (error) {
+        callback({ error: "Failed to fetch selected player type data" });
+      }
+    });
+  });
+  
+  modal.querySelector('.modal-close').addEventListener('click', function() {
+    modal.remove();
+    callback({ error: "User cancelled two-way selection" });
+  });
+  
+  // Close modal when clicking outside
+  modal.addEventListener('click', function(e) {
+    if (e.target === modal) {
+      modal.remove();
+      callback({ error: "User cancelled two-way selection" });
+    }
+  });
 }
 
 async function handleDisambiguation(originalName, suggestions, mode) {
@@ -370,9 +510,9 @@ function showDisambiguationModal(suggestions, originalName, callback, mode) {
       const selectedName = this.dataset.name;
       modal.remove();
       
-      // Fetch stats for selected player
+      // Fetch stats for selected player using the two-way endpoint
       try {
-        const response = await fetch(`/player-disambiguate?name=${encodeURIComponent(selectedName)}&mode=${mode}`);
+        const response = await fetch(`/player-two-way?name=${encodeURIComponent(selectedName)}&mode=${mode}`);
         const result = await response.json();
         callback(result);
       } catch (error) {

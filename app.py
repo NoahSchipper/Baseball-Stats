@@ -11,6 +11,33 @@ cache.enable()
 
 DB_PATH = r"C:\Users\noahs\OneDrive\Documents\Baseball Stats\lahman2024.db"
 
+KNOWN_TWO_WAY_PLAYERS = {
+    # Modern era two-way players
+    'ohtansh01': 'Shohei Ohtani',
+    
+    # Historical two-way players (primarily known for both)
+    'ruthba01': 'Babe Ruth',
+    
+    # Players who had significant time as both (adjust as needed)
+    'rickmri01': 'Rick Ankiel',  # Started as pitcher, became position player
+    'martipe02': 'Pedro Martinez',  # Some hitting early in career
+    
+    # Add more as you identify them
+    # Format: 'playerid': 'Display Name'
+}
+
+def is_predefined_two_way_player(playerid):
+    """Check if player is in our predefined list of two-way players"""
+    return playerid in KNOWN_TWO_WAY_PLAYERS
+
+def detect_two_way_player_simple(playerid, conn):
+    """Simplified two-way detection using only predefined list"""
+    if is_predefined_two_way_player(playerid):
+        return "two-way"
+    
+    # For all other players, use the original detection logic
+    return detect_player_type(playerid, conn)
+
 def get_career_war(playerid):
     """Get career WAR from JEFFBAGWELL database"""
     try:
@@ -84,6 +111,135 @@ def detect_player_type(playerid, conn):
         return "hitter"
     else:
         return "pitcher" if pitch_seasons > 0 else "hitter"
+'''
+def detect_two_way_player(playerid, conn):
+    """Detect if player is a significant two-way player (both pitcher and hitter)"""
+    cursor = conn.cursor()
+    
+    # Get pitching stats
+    pitching_query = """
+    SELECT COUNT(*) as pitch_seasons, SUM(g) as total_games_pitched, 
+           SUM(gs) as total_starts, SUM(ipouts) as total_outs
+    FROM lahman_pitching WHERE playerid = ?
+    """
+    cursor.execute(pitching_query, (playerid,))
+    pitch_result = cursor.fetchone()
+    
+    # Get batting stats  
+    batting_query = """
+    SELECT COUNT(*) as bat_seasons, SUM(g) as total_games_batted, 
+           SUM(ab) as total_at_bats, SUM(h) as total_hits
+    FROM lahman_batting WHERE playerid = ?
+    """
+    cursor.execute(batting_query, (playerid,))
+    bat_result = cursor.fetchone()
+    
+    pitch_seasons = pitch_result[0] if pitch_result else 0
+    total_games_pitched = pitch_result[1] if pitch_result and pitch_result[1] else 0
+    total_starts = pitch_result[2] if pitch_result and pitch_result[2] else 0
+    total_innings = (pitch_result[3] or 0) / 3.0
+    
+    bat_seasons = bat_result[0] if bat_result else 0
+    total_games_batted = bat_result[1] if bat_result and bat_result[1] else 0
+    total_at_bats = bat_result[2] if bat_result and bat_result[2] else 0
+    total_hits = bat_result[3] if bat_result and bat_result[3] else 0
+    
+    # Define thresholds for significant two-way players
+    significant_pitcher = (
+        pitch_seasons >= 3 or 
+        total_games_pitched >= 50 or 
+        total_starts >= 10 or
+        total_innings >= 100
+    )
+    
+    significant_hitter = (
+        bat_seasons >= 3 or 
+        total_at_bats >= 500 or
+        total_hits >= 100
+    )
+    
+    if significant_pitcher and significant_hitter:
+        return "two-way"
+    elif significant_pitcher:
+        return "pitcher"
+    elif significant_hitter:
+        return "hitter"
+    else:
+        return "pitcher" if pitch_seasons > 0 else "hitter"
+        ''' 
+
+# Add this new route for two-way player handling
+@app.route("/player-two-way")
+def get_player_with_two_way():
+    """Enhanced player endpoint that handles two-way players"""
+    name = request.args.get("name", "")
+    mode = request.args.get("mode", "career").lower()
+    player_type = request.args.get("player_type", "").lower()  # "pitcher" or "hitter"
+
+    if " " not in name:
+        return jsonify({"error": "Enter full name"}), 400
+
+    # Try improved lookup with disambiguation
+    playerid, suggestions = improved_player_lookup_with_disambiguation(name)
+    
+    if playerid is None and suggestions:
+        return jsonify({
+            "error": "Multiple players found",
+            "suggestions": suggestions,
+            "message": f"Found {len(suggestions)} players named '{name.split(' Jr.')[0].split(' Sr.')[0]}'. Please specify which player:"
+        }), 422
+    
+    if playerid is None:
+        return jsonify({"error": "Player not found"}), 404
+    
+    conn = sqlite3.connect(DB_PATH)
+    detected_type = detect_two_way_player_simple(playerid, conn)
+    
+    # Get player's actual name for display
+    cursor = conn.cursor()
+    cursor.execute("SELECT namefirst, namelast FROM lahman_people WHERE playerid = ?", (playerid,))
+    name_result = cursor.fetchone()
+    first, last = name_result if name_result else ("Unknown", "Unknown")
+    
+    # Handle two-way players
+    if detected_type == "two-way" and not player_type:
+        # Return options for user to choose
+        conn.close()
+        return jsonify({
+            "error": "Two-way player detected",
+            "player_type": "two-way",
+            "options": [
+                {"type": "pitcher", "label": f"{first} {last} (Pitching Stats)"},
+                {"type": "hitter", "label": f"{first} {last} (Hitting Stats)"}
+            ],
+            "message": f"{first} {last} is a known two-way player. Please select which stats to display:"
+        }), 423  # Using 423 for two-way player selection
+    
+    # Use specified player_type or detected type
+    final_type = player_type if player_type in ["pitcher", "hitter"] else detected_type
+    if final_type == "two-way":
+        final_type = "hitter"  # Default fallback
+    
+    # Get photo URL
+    mlb_id = None
+    try:
+        lookup = playerid_lookup(last, first)
+        if not lookup.empty and not pd.isna(lookup.iloc[0]['key_mlbam']):
+            mlb_id = int(lookup.iloc[0]['key_mlbam'])
+    except Exception:
+        pass
+
+    photo_url = None
+    if mlb_id:
+        photo_url = f"https://img.mlbstatic.com/mlb-photos/image/upload/v1/people/{mlb_id}/headshot/67/current.jpg"
+
+    # Process stats based on final type
+    if final_type == "pitcher":
+        return handle_pitcher_stats(playerid, conn, mode, photo_url, first, last)
+    else:
+        conn.close()
+        return handle_hitter_stats(playerid, mode, photo_url, first, last)
+
 
 # Add these routes to your existing Flask app
 @app.route('/search-players')
@@ -375,6 +531,7 @@ def get_player_with_disambiguation():
     """Enhanced player endpoint that handles disambiguation"""
     name = request.args.get("name", "")
     mode = request.args.get("mode", "career").lower()
+    player_type = request.args.get("player_type", "").lower()
 
     if " " not in name:
         return jsonify({"error": "Enter full name"}), 400
@@ -395,7 +552,7 @@ def get_player_with_disambiguation():
     
     # Continue with existing logic using the found playerid
     conn = sqlite3.connect(DB_PATH)
-    player_type = detect_player_type(playerid, conn)
+    detected_type = detect_two_way_player_simple(playerid, conn)
     
     # Get player's actual name for display
     cursor = conn.cursor()
@@ -403,6 +560,23 @@ def get_player_with_disambiguation():
     name_result = cursor.fetchone()
     first, last = name_result if name_result else ("Unknown", "Unknown")
     
+    # Handle two-way players
+    if detected_type == "two-way" and not player_type:
+        conn.close()
+        return jsonify({
+            "error": "Two-way player detected",
+            "player_type": "two-way", 
+            "options": [
+                {"type": "pitcher", "label": f"{first} {last} (Pitching Stats)"},
+                {"type": "hitter", "label": f"{first} {last} (Hitting Stats)"}
+            ],
+            "message": f"{first} {last} is a known two-way player. Please select which stats to display:"
+        }), 423
+    
+    # Continue with existing logic using specified or detected type
+    final_type = player_type if player_type in ["pitcher", "hitter"] else detected_type
+    if final_type == "two-way":
+        final_type = "hitter"  # Default fallback
     # Rest of the logic remains the same...
     # [Include your existing photo URL and stats logic here]
     
