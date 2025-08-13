@@ -38,4 +38,4 @@ for csv_file in os.listdir(CSV_FOLDER):
 
 # 4. Close connection
 conn.close()
-print(f"✅ All Lahman CSVs imported into {DB_PATH}")
+print(f"All Lahman CSVs imported into {DB_PATH}")

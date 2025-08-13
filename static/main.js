@@ -425,6 +425,8 @@ async function handleDisambiguation(originalName, suggestions, mode) {
   });
 }
 
+let currentDisambiguationPlayer = null;
+
 function showDisambiguationModal(suggestions, originalName, callback, mode) {
   // Remove any existing modal
   const existingModal = document.getElementById('disambiguation-modal');
@@ -465,8 +467,8 @@ function showDisambiguationModal(suggestions, originalName, callback, mode) {
         Found multiple players named "${cleanName}". Please select which player:
       </p>
       <div class="player-options" style="margin-bottom: 24px;">
-        ${suggestions.map(player => `
-          <div class="player-option" data-name="${player.name}" style="
+        ${suggestions.map((player, index) => `
+          <div class="player-option" data-name="${player.name}" data-playerid="${player.playerid}" style="
             padding: 16px;
             border: 2px solid #e9ecef;
             border-radius: 6px;
@@ -481,6 +483,7 @@ function showDisambiguationModal(suggestions, originalName, callback, mode) {
               </strong>
               <div class="player-meta" style="font-size: 13px; color: #666;">
                 Debut: ${player.debut_year} | Born: ${player.birth_year}
+                ${player.playerid ? ` | ID: ${player.playerid}` : ''}
               </div>
             </div>
           </div>
@@ -508,14 +511,33 @@ function showDisambiguationModal(suggestions, originalName, callback, mode) {
   modal.querySelectorAll('.player-option').forEach(option => {
     option.addEventListener('click', async function() {
       const selectedName = this.dataset.name;
+      const selectedPlayerId = this.dataset.playerid;
+      console.log(`User selected: ${selectedName} (ID: ${selectedPlayerId})`);
       modal.remove();
       
-      // Fetch stats for selected player using the two-way endpoint
+      // Hide any open dropdowns to prevent interference
+      hideAllDropdowns();
+      
+      // Fetch stats for selected player using the exact name from suggestions
       try {
+        console.log(`Fetching stats for selected player: ${selectedName}`);
         const response = await fetch(`/player-two-way?name=${encodeURIComponent(selectedName)}&mode=${mode}`);
-        const result = await response.json();
-        callback(result);
+        console.log(`Response status for selected player: ${response.status}`);
+        
+        if (response.ok) {
+          const result = await response.json();
+          console.log('Successfully fetched selected player data:', result);
+          // Add the selected name to the result so we can use it in the display
+          result.selected_name = selectedName;
+          result.original_search_name = originalName;
+          callback(result);
+        } else {
+          const errorData = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
+          console.error('Error fetching selected player:', errorData);
+          callback(errorData);
+        }
       } catch (error) {
+        console.error('Error in disambiguation selection:', error);
         callback({ error: "Failed to fetch selected player data" });
       }
     });
@@ -552,12 +574,21 @@ async function comparePlayers() {
   const tbody = document.getElementById("comparisonBody");
   tbody.innerHTML = `<tr><td colspan='4' style='text-align: center; padding: 20px;'>Loading player data...</td></tr>`;
 
+  console.log(`=== COMPARING PLAYERS ===`);
+  console.log(`Player A: ${nameA}`);
+  console.log(`Player B: ${nameB}`);
+  console.log(`Mode: ${mode}`);
+
   const [resA, resB] = await Promise.all([
     fetchStats(nameA, mode),
     fetchStats(nameB, mode),
   ]);
 
-  updateComparisonTable(resA, resB, nameA, nameB);
+// Use the selected names if available, otherwise use the input names
+  const displayNameA = resA?.selected_name || nameA;
+  const displayNameB = resB?.selected_name || nameB;
+
+  updateComparisonTable(resA, resB, displayNameA, displayNameB);
 }
 
 document.getElementById("viewMode").addEventListener("change", comparePlayers);
@@ -566,7 +597,7 @@ document.getElementById("viewMode").addEventListener("change", comparePlayers);
 let searchTimeout;
 let popularPlayersCache = null;
 let currentDropdown = null;
-const SEARCH_DELAY = 300;
+const SEARCH_DELAY = 500;
 
 // Show dropdown with players
 function showDropdown(inputId, players) {

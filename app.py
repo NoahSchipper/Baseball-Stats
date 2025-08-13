@@ -38,6 +38,122 @@ def detect_two_way_player_simple(playerid, conn):
     # For all other players, use the original detection logic
     return detect_player_type(playerid, conn)
 
+def get_photo_url_for_player(playerid, conn):
+    """Get photo URL using the correct player info from database"""
+    try:
+        # Get the actual names and debut info from the database for this specific playerid
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT namefirst, namelast, debut, finalgame, birthyear 
+            FROM lahman_people WHERE playerid = ?
+        """, (playerid,))
+        name_result = cursor.fetchone()
+        
+        if not name_result:
+            print(f"No name found for playerid: {playerid}")
+            return None
+            
+        db_first, db_last, debut, final_game, birth_year = name_result
+        print(f"Getting photo for playerid: {playerid}, Database name: {db_first} {db_last}, Debut: {debut}")
+        
+        # Special handling for known father/son Sr/Jr cases with direct MLB ID mappings
+        direct_mlb_mappings = {
+            # Format: playerid -> (search_name, mlb_id)
+            'griffke01': ('Ken Griffey', None),         # Sr. - let lookup handle it
+            'griffke02': ('Ken Griffey Jr.', None),     # Jr. - let lookup handle it
+            'tatisfe01': ('Fernando Tatis', 123107),    # Sr. with direct MLB ID
+            'tatisfe02': ('Fernando Tatis Jr.', 665487), # Jr. with direct MLB ID
+            'ripkeca99': ('Cal Ripken Sr.', None),      # Sr. - was mostly coach/manager
+            'ripkeca01': ('Cal Ripken Jr.', 121222),    # Jr. with direct MLB ID
+            'raineti01': ('Tim Raines', 120891),           # Sr. with direct MLB ID
+            'raineti02': ('Tim Raines Jr.', 406428),      # Jr. with direct MLB ID
+            'alomasa01': ('Sandy Alomar Sr.', None),    # Sr.
+            'alomasa02': ('Sandy Alomar Jr.', None),    # Jr.
+            'rosepe01': ('Pete Rose', None),            # Sr. - let lookup handle it
+            'rosepe02': ('Pete Rose Jr.', 121453),        # Jr. with direct MLB ID
+        }
+        
+        # Check if we have a direct mapping for this player
+        if playerid in direct_mlb_mappings:
+            search_name, direct_mlb_id = direct_mlb_mappings[playerid]
+            print(f"Using direct mapping for {playerid}: {search_name}")
+            
+            # If we have a direct MLB ID, use it
+            if direct_mlb_id:
+                photo_url = f"https://img.mlbstatic.com/mlb-photos/image/upload/v1/people/{direct_mlb_id}/headshot/67/current.jpg"
+                print(f"Using direct MLB ID {direct_mlb_id}: {photo_url}")
+                return photo_url
+        else:
+            # Not a known special case, use database names
+            search_name = f"{db_first} {db_last}"
+        
+        # For cases without direct MLB ID, do the lookup
+        mlb_id = None
+        try:
+            print(f"Looking up MLB ID for: {search_name}")
+            
+            # Split the search name for the lookup function
+            name_parts = search_name.replace(' Jr.', '').replace(' Sr.', '').replace(' III', '').replace(' II', '').split()
+            lookup_first = name_parts[0]
+            lookup_last = ' '.join(name_parts[1:])
+            
+            print(f"Lookup parts: first='{lookup_first}', last='{lookup_last}'")
+            lookup = playerid_lookup(lookup_last, lookup_first)
+            print(f"Lookup result shape: {lookup.shape if not lookup.empty else 'Empty'}")
+            
+            if not lookup.empty:
+                print(f"Lookup results: {lookup[['name_last', 'name_first', 'key_mlbam', 'mlb_played_first', 'mlb_played_last']].to_dict('records')}")
+                
+                # For father/son cases, try to match by career years
+                best_match = None
+                if len(lookup) > 1:
+                    debut_year = int(debut[:4]) if debut else None
+                    final_year = int(final_game[:4]) if final_game else None
+                    
+                    for _, row in lookup.iterrows():
+                        if pd.isna(row['key_mlbam']):
+                            continue
+                            
+                        mlb_first = row.get('mlb_played_first')
+                        mlb_last = row.get('mlb_played_last')
+                        
+                        # Try to match by career overlap
+                        if debut_year and mlb_first and mlb_last:
+                            mlb_first_year = int(mlb_first) if mlb_first else None
+                            mlb_last_year = int(mlb_last) if mlb_last else None
+                            
+                            if (mlb_first_year and abs(mlb_first_year - debut_year) <= 1 and
+                                mlb_last_year and final_year and abs(mlb_last_year - final_year) <= 1):
+                                best_match = row
+                                print(f"Found career year match: {mlb_first_year}-{mlb_last_year} vs {debut_year}-{final_year}")
+                                break
+                
+                # Use best match or first available
+                target_row = best_match if best_match is not None else lookup.iloc[0]
+                
+                if not pd.isna(target_row['key_mlbam']):
+                    mlb_id = int(target_row['key_mlbam'])
+                    print(f"Found MLB ID: {mlb_id}")
+                else:
+                    print("MLB ID is NaN")
+            else:
+                print("No lookup results found")
+                
+        except Exception as e:
+            print(f"MLB ID lookup failed for {search_name}: {e}")
+
+        if mlb_id:
+            photo_url = f"https://img.mlbstatic.com/mlb-photos/image/upload/v1/people/{mlb_id}/headshot/67/current.jpg"
+            print(f"Generated photo URL: {photo_url}")
+            return photo_url
+        
+        print("No MLB ID found, returning None")
+        return None
+        
+    except Exception as e:
+        print(f"Error getting photo URL for playerid {playerid}: {e}")
+        return None
+
 def get_career_war(playerid):
     """Get career WAR from JEFFBAGWELL database"""
     try:
@@ -165,17 +281,7 @@ def get_player_with_two_way():
         final_type = "hitter"  # Default fallback
     
     # Get photo URL
-    mlb_id = None
-    try:
-        lookup = playerid_lookup(last, first)
-        if not lookup.empty and not pd.isna(lookup.iloc[0]['key_mlbam']):
-            mlb_id = int(lookup.iloc[0]['key_mlbam'])
-    except Exception:
-        pass
-
-    photo_url = None
-    if mlb_id:
-        photo_url = f"https://img.mlbstatic.com/mlb-photos/image/upload/v1/people/{mlb_id}/headshot/67/current.jpg"
+    photo_url = get_photo_url_for_player(playerid, conn)
 
     # Process stats based on final type
     if final_type == "pitcher":
@@ -389,6 +495,8 @@ def improved_player_lookup_with_disambiguation(name):
     Improved player lookup that handles common father/son cases
     and provides suggestions when multiple players exist
     """
+    print(f"Looking up player: {name}")
+    
     # Handle common suffixes
     suffixes = {
         'jr': 'Jr.',
@@ -523,18 +631,7 @@ def get_player_with_disambiguation():
         final_type = "hitter"  # Default fallback
     # Rest of the logic remains the same...
     # [Include your existing photo URL and stats logic here]
-    
-    mlb_id = None
-    try:
-        lookup = playerid_lookup(last, first)
-        if not lookup.empty and not pd.isna(lookup.iloc[0]['key_mlbam']):
-            mlb_id = int(lookup.iloc[0]['key_mlbam'])
-    except Exception:
-        pass
-
-    photo_url = None
-    if mlb_id:
-        photo_url = f"https://img.mlbstatic.com/mlb-photos/image/upload/v1/people/{mlb_id}/headshot/67/current.jpg"
+    photo_url = get_photo_url_for_player(playerid, conn)
 
     if player_type == "pitcher":
         return handle_pitcher_stats(playerid, conn, mode, photo_url, first, last)
@@ -748,17 +845,8 @@ def get_player_stats():
 
     player_type = detect_player_type(playerid, conn)
 
-    mlb_id = None
-    try:
-        lookup = playerid_lookup(last, first)
-        if not lookup.empty and not pd.isna(lookup.iloc[0]['key_mlbam']):
-            mlb_id = int(lookup.iloc[0]['key_mlbam'])
-    except Exception:
-        pass
-
-    photo_url = None
-    if mlb_id:
-        photo_url = f"https://img.mlbstatic.com/mlb-photos/image/upload/v1/people/{mlb_id}/headshot/67/current.jpg"
+    #get player photo
+    photo_url = get_photo_url_for_player(playerid, conn)
 
     if player_type == "pitcher":
         return handle_pitcher_stats(playerid, conn, mode, photo_url, first, last)
@@ -1372,8 +1460,6 @@ def find_live_player_match(df_live, first, last):
         return last_name_matches.head(1)
     
     return pd.DataFrame()
-
-
 
 if __name__ == "__main__":
     app.run(debug=True)
