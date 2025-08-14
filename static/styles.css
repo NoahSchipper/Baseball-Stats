@@ -361,7 +361,7 @@ td {
 /* Highlighting for better stats - green background */
 .better-stat {
     background-color: #c8e6c8 !important;
-    color: #2e7d2e !important;
+    color: black !important;
     font-weight: bold !important;
     font-size: 1.05rem !important;
 }
@@ -369,7 +369,7 @@ td {
 /* Alternative highlighting with subtle border */
 .better-stat-alt {
     background-color: #e8f5e8 !important;
-    color: #1b5e20 !important;
+    color: black !important;
     font-weight: bold;
     border: 2px solid #4caf50 !important;
 }
@@ -377,7 +377,7 @@ td {
 /* For tied stats (optional) */
 .tied-stat {
     background-color: #fff3cd !important;
-    color: #856404 !important;
+    color: black !important;
     font-weight: bold;
 }
 
