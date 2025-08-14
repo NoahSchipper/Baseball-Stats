@@ -153,6 +153,79 @@ def get_photo_url_for_player(playerid, conn):
     except Exception as e:
         print(f"Error getting photo URL for playerid {playerid}: {e}")
         return None
+    
+def get_world_series_championships(playerid, conn):
+    """Get World Series championships for a player"""
+    try:
+        cursor = conn.cursor()
+        
+        print(f"DEBUG: Looking for WS championships for playerid: '{playerid}'")
+        
+        # Method 1: Check if player's team won World Series in years they played
+        ws_query = """
+        SELECT DISTINCT b.yearid, b.teamid, s.name as team_name
+        FROM lahman_batting b
+        JOIN lahman_seriespost sp ON b.yearid = sp.yearid AND b.teamid = sp.teamidwinner
+        LEFT JOIN lahman_teams s ON b.teamid = s.teamid AND b.yearid = s.yearid
+        WHERE b.playerid = ? AND sp.round = 'WS'
+        
+        UNION
+        
+        SELECT DISTINCT p.yearid, p.teamid, s.name as team_name
+        FROM lahman_pitching p
+        JOIN lahman_seriespost sp ON p.yearid = sp.yearid AND p.teamid = sp.teamidwinner
+        LEFT JOIN lahman_teams s ON p.teamid = s.teamid AND p.yearid = s.yearid
+        WHERE p.playerid = ? AND sp.round = 'WS'
+        
+        ORDER BY 1 DESC
+        """
+        
+        print(f"DEBUG: Executing WS query for playerid: '{playerid}'")
+        cursor.execute(ws_query, (playerid, playerid))
+        ws_results = cursor.fetchall()
+        
+        print(f"DEBUG: Raw WS query results: {ws_results}")
+        
+        championships = []
+        for row in ws_results:
+            year, team_id, team_name = row
+            championships.append({
+                'year': year,
+                'team': team_id,
+                'team_name': team_name or team_id
+            })
+        
+        print(f"DEBUG: Final championships list: {championships}")
+        print(f"Found {len(championships)} World Series championships for {playerid}")
+        
+        return championships
+        
+    except Exception as e:
+        print(f"Error getting World Series championships: {e}")
+        # Fallback: check awards table for WS entries
+        try:
+            cursor.execute("""
+                SELECT yearid, notes
+                FROM lahman_awardsplayers 
+                WHERE playerid = ? AND awardid = 'WS'
+                ORDER BY yearid DESC
+            """, (playerid,))
+            
+            fallback_results = cursor.fetchall()
+            championships = []
+            for year, notes in fallback_results:
+                championships.append({
+                    'year': year,
+                    'team': 'Unknown',
+                    'team_name': notes or 'World Series Champion'
+                })
+            
+            return championships
+            
+        except Exception as e2:
+            print(f"Fallback WS lookup also failed: {e2}")
+            return []
+
 
 def get_career_war(playerid):
     """Get career WAR from JEFFBAGWELL database"""
@@ -227,7 +300,10 @@ def detect_player_type(playerid, conn):
         return "hitter"
     else:
         return "pitcher" if pitch_seasons > 0 else "hitter"
-    
+
+
+        
+
 def get_player_awards(playerid, conn):
     """Get all awards for a player from the lahman database"""
     try:
@@ -274,18 +350,29 @@ def get_player_awards(playerid, conn):
         #Get MLB All-Star Game appearances:
         allstar_games = get_allstar_appearances(playerid, conn)
         print(f"MLB All-Star Game appearances: {allstar_games}")
-    
+
+        #Get world series championships
+        ws_championships = get_world_series_championships(playerid, conn)
+        print(f"World Series championships: {ws_championships}")
+
+        
         return {
             'awards': awards,
             'summary': award_summary,
-            'mlbAllStar': allstar_games
+            'mlbAllStar': allstar_games,
+            'world_series_championships': ws_championships,
+            'ws_count': len(ws_championships)
         }
-        
+
     except Exception as e:
-        print(f"Error getting awards for playerid {playerid}: {e}")
-        import traceback
-        traceback.print_exc()
-        return {'awards': [], 'summary': {}}
+        print(f"Error getting player awards: {e}")
+        return {
+            'awards': [],
+            'summary': {},
+            'mlbAllStar': [],
+            'world_series_championships': [],
+            'ws_count': 0
+        }
 
 def format_award_name(award_id):
     """Convert award IDs to readable names"""
@@ -1478,4 +1565,14 @@ def find_live_player_match(df_live, first, last):
     return pd.DataFrame()
 
 if __name__ == "__main__":
+    # Test code
+    import sqlite3
+    conn = sqlite3.connect(DB_PATH)
+    
+    print("Testing Kyle Tucker:")
+    result = get_world_series_championships('tuckeky01', conn)
+    print(f"Result: {result}")
+    
+    conn.close()
+    
     app.run(debug=True)

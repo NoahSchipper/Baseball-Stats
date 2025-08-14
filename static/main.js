@@ -96,8 +96,8 @@ function formatAwardsForStructuredDisplay(awards) {
     console.log("No awards data provided");
     return {
       championships: 0,
-      tsnAllStar: 0,      // Separate TSN All-Star count
-      mlbAllStar: 0,      // MLB All-Star Game appearances (if available)
+      tsnAllStar: 0, // Separate TSN All-Star count
+      mlbAllStar: 0, // MLB All-Star Game appearances (if available)
       goldGlove: 0,
       silverSlugger: 0,
       mvp: 0,
@@ -152,19 +152,28 @@ function formatAwardsForStructuredDisplay(awards) {
 
   // Enhanced mapping to properly distinguish TSN All-Stars from MLB All-Star Games
   const result = {
-    championships:
-      summary["WS"]?.count || summary["World Series Champion"]?.count || 0,
-    
+    // FIXED: Check for World Series championships in multiple places
+    championships: 
+      (awards.world_series_championships && Array.isArray(awards.world_series_championships) 
+        ? awards.world_series_championships.length 
+        : 0) ||
+      awards.ws_count ||
+      summary["WS"]?.count || 
+      summary["World Series Champion"]?.count || 
+      0,
+
     // TSN All-Star team selections (from awards table)
     tsnAllStar:
-      summary["AS"]?.count || 
-      summary["TSN All-Star"]?.count || 
-      summary["The Sporting News All-Star"]?.count || 
+      summary["AS"]?.count ||
+      summary["TSN All-Star"]?.count ||
+      summary["The Sporting News All-Star"]?.count ||
       0,
-    
+
     // MLB All-Star Game appearances
-    mlbAllStar: awards.mlbAllStar || 0,
-    
+    mlbAllStar: (awards.mlbAllStar && Array.isArray(awards.mlbAllStar) 
+      ? awards.mlbAllStar.length 
+      : 0) || awards.mlbAllStar || 0,
+
     goldGlove: summary["GG"]?.count || summary["Gold Glove"]?.count || 0,
     silverSlugger:
       summary["SS"]?.count || summary["Silver Slugger"]?.count || 0,
@@ -190,7 +199,7 @@ function formatAwardsForStructuredDisplay(awards) {
 function getOtherMajorAwards(summary) {
   const majorAwardTypes = [
     "ALCS MVP",
-    "NLCS MVP", 
+    "NLCS MVP",
     "ASG MVP",
     "COMEB",
     "Hutch",
@@ -199,8 +208,8 @@ function getOtherMajorAwards(summary) {
     "Edgar Martinez",
     "Lou Gehrig",
     "Branch Rickey",
-    "All-MLB Team - First Team",
-    "All-MLB Team - Second Team",
+    "All-MLB - First Team",
+    "All-MLB - Second Team",
     "Player of the Month",
     "Player of the Week",
   ];
@@ -213,15 +222,27 @@ function getOtherMajorAwards(summary) {
 
     // Skip awards we've already categorized in the main function
     const mainAwards = [
-      "WS", "World Series Champion",
-      "AS", "TSN All-Star", "The Sporting News All-Star", "MLB All-Star", "All-Star Game",
-      "GG", "Gold Glove",
-      "SS", "Silver Slugger",
-      "MVP", "Most Valuable Player",
-      "CYA", "CY", "Cy Young Award",
-      "ROY", "Rookie of the Year",
-      "WSMVP", "World Series MVP",
-      "Reliever", "Reliever of the Year",
+      "WS",
+      "World Series Champion",
+      "AS",
+      "The Sporting News All-Star",
+      "MLB All-Star",
+      "All-Star Game",
+      "GG",
+      "Gold Glove",
+      "SS",
+      "Silver Slugger",
+      "MVP",
+      "Most Valuable Player",
+      "CYA",
+      "CY",
+      "Cy Young Award",
+      "ROY",
+      "Rookie of the Year",
+      "WSMVP",
+      "World Series MVP",
+      "Reliever",
+      "Reliever of the Year",
     ];
 
     if (!mainAwards.includes(awardKey)) {
@@ -235,7 +256,6 @@ function getOtherMajorAwards(summary) {
 
   return other;
 }
-
 
 function updateComparisonTable(resA, resB, nameA, nameB) {
   const tbody = document.getElementById("comparisonBody");
@@ -341,165 +361,165 @@ function updateComparisonTable(resA, resB, nameA, nameB) {
 
   // AWARDS SECTION - Fixed to properly check for awards
   console.log("Checking awards existence...");
-  const hasAwardsA = resA.awards && (resA.awards.summary || resA.awards.awards);
-  const hasAwardsB = resB.awards && (resB.awards.summary || resB.awards.awards);
+    const hasAwardsA =
+      resA.awards && (resA.awards.summary || resA.awards.awards);
+    const hasAwardsB =
+      resB.awards && (resB.awards.summary || resB.awards.awards);
 
-  console.log("Has awards A:", hasAwardsA);
-  console.log("Has awards B:", hasAwardsB);
+  if (mode === "live" || mode === "season") {
+    console.log("Live or season mode detected, skipping awards section");
+  } else if (hasAwardsA || hasAwardsB) {
 
-  if (hasAwardsA || hasAwardsB) {
-    console.log("Processing awards data...");
+    console.log("Has awards A:", hasAwardsA);
+    console.log("Has awards B:", hasAwardsB);
 
-    const awardsA = formatAwardsForStructuredDisplay(resA.awards);
-    const awardsB = formatAwardsForStructuredDisplay(resB.awards);
+    if (hasAwardsA || hasAwardsB) {
+      console.log("Processing awards data...");
 
-    console.log("Formatted awards A:", awardsA);
-    console.log("Formatted awards B:", awardsB);
+      const awardsA = formatAwardsForStructuredDisplay(resA.awards);
+      const awardsB = formatAwardsForStructuredDisplay(resB.awards);
 
-    // Define award rows to display (only show if at least one player has the award)
-    const awardRows = [
-      {
-        key: "championships",
-        label: "Championships",
-        valueA: awardsA.championships,
-        valueB: awardsB.championships,
-      },
-      { key: "mvp", label: "MVP", valueA: awardsA.mvp, valueB: awardsB.mvp },
-      {
-        key: "cyYoung",
-        label: "Cy Young",
-        valueA: awardsA.cyYoung,
-        valueB: awardsB.cyYoung,
-      },
-      {
-        key: "royAward",
-        label: "Rookie of Year",
-        valueA: awardsA.royAward,
-        valueB: awardsB.royAward,
-      },
-      {
-        key: "worldSeriesMvp",
-        label: "World Series MVP",
-        valueA: awardsA.worldSeriesMvp,
-        valueB: awardsB.worldSeriesMvp,
-      },
-      {
-        key: "mlbAllStar",
-        label: "All-Star Games",
-        valueA: awardsA.mlbAllStar,
-        valueB: awardsB.mlbAllStar,
-      },
-      {
-        key: "TSNAllStar",
-        label: "TSN All-Star Games",
-        valueA: awardsA.tsnAllStar,
-        valueB: awardsB.tsnAllStar,
-      },
-      {
-        key: "goldGlove",
-        label: "Gold Glove",
-        valueA: awardsA.goldGlove,
-        valueB: awardsB.goldGlove,
-      },
-      {
-        key: "silverSlugger",
-        label: "Silver Slugger",
-        valueA: awardsA.silverSlugger,
-        valueB: awardsB.silverSlugger,
-      },
-      {
-        key: "relieverAward",
-        label: "Reliever of Year",
-        valueA: awardsA.relieverAward,
-        valueB: awardsB.relieverAward,
-      },
-    ];
+      console.log("Formatted awards A:", awardsA);
+      console.log("Formatted awards B:", awardsB);
 
-    // Track if any awards were added
-    let awardsAdded = 0;
+      // Define award rows to display (only show if at least one player has the award)
+      const awardRows = [
+        {
+          key: "championships",
+          label: "Championships",
+          valueA: awardsA.championships,
+          valueB: awardsB.championships,
+        },
+        { key: "mvp", label: "MVP", valueA: awardsA.mvp, valueB: awardsB.mvp },
+        {
+          key: "cyYoung",
+          label: "Cy Young",
+          valueA: awardsA.cyYoung,
+          valueB: awardsB.cyYoung,
+        },
+        {
+          key: "royAward",
+          label: "Rookie of Year",
+          valueA: awardsA.royAward,
+          valueB: awardsB.royAward,
+        },
+        {
+          key: "worldSeriesMvp",
+          label: "World Series MVP",
+          valueA: awardsA.worldSeriesMvp,
+          valueB: awardsB.worldSeriesMvp,
+        },
+        {
+          key: "mlbAllStar",
+          label: "All-Star Games",
+          valueA: awardsA.mlbAllStar,
+          valueB: awardsB.mlbAllStar,
+        },
+        {
+          key: "goldGlove",
+          label: "Gold Glove",
+          valueA: awardsA.goldGlove,
+          valueB: awardsB.goldGlove,
+        },
+        {
+          key: "silverSlugger",
+          label: "Silver Slugger",
+          valueA: awardsA.silverSlugger,
+          valueB: awardsB.silverSlugger,
+        },
+        {
+          key: "relieverAward",
+          label: "Reliever of Year",
+          valueA: awardsA.relieverAward,
+          valueB: awardsB.relieverAward,
+        },
+      ];
 
-    // Add Awards & Honors header before the first award (only if we have awards to show)
-    let hasAnyAwards = awardRows.some(
-      (row) => row.valueA > 0 || row.valueB > 0
-    );
-    if (hasAnyAwards && awardsAdded === 0) {
-      const headerRow = document.createElement("tr");
-      headerRow.innerHTML = `<th colspan="3" class="stat-header">Awards & Honors <br> (Through 2024 Season)</th>`;
-      tbody.appendChild(headerRow);
-    }
-    
-    // Only show awards where at least one player has a non-zero value
-    awardRows.forEach((awardRow, index) => {
-      if (awardRow.valueA > 0 || awardRow.valueB > 0) {
-        const row = document.createElement("tr");
+      // Track if any awards were added
+      let awardsAdded = 0;
 
-        // Display values - show 0 for players without awards, actual count for those with awards
-        const displayA = awardRow.valueA > 0 ? awardRow.valueA : "0";
-        const displayB = awardRow.valueB > 0 ? awardRow.valueB : "0";
+      // Add Awards & Honors header before the first award (only if we have awards to show)
+      let hasAnyAwards = awardRows.some(
+        (row) => row.valueA > 0 || row.valueB > 0
+      );
+      if (hasAnyAwards && awardsAdded === 0) {
+        const headerRow = document.createElement("tr");
+        headerRow.innerHTML = `<th colspan="3" class="stat-header">Awards & Honors <br> (Through 2024 Season)</th>`;
+        tbody.appendChild(headerRow);
+      }
 
-        row.innerHTML = `
+      // Only show awards where at least one player has a non-zero value
+      awardRows.forEach((awardRow, index) => {
+        if (awardRow.valueA > 0 || awardRow.valueB > 0) {
+          const row = document.createElement("tr");
+
+          // Display values - show 0 for players without awards, actual count for those with awards
+          const displayA = awardRow.valueA > 0 ? awardRow.valueA : "0";
+          const displayB = awardRow.valueB > 0 ? awardRow.valueB : "0";
+
+          row.innerHTML = `
           <td style="text-align: center; padding: 8px;">${displayA}</td>
           <td style="text-align: center; padding: 8px; font-weight: bold; background-color: #f1f3f4;">${awardRow.label}</td>
           <td style="text-align: center; padding: 8px;">${displayB}</td>
         `;
-        tbody.appendChild(row);
-        awardsAdded++;
+          tbody.appendChild(row);
+          awardsAdded++;
 
-        console.log(
-          `Added award row: ${awardRow.label} - A: ${displayA}, B: ${displayB}`
-        );
-      }
-    });
+          console.log(
+            `Added award row: ${awardRow.label} - A: ${displayA}, B: ${displayB}`
+          );
+        }
+      });
 
-    // Add other major awards if any
-    const allOtherAwards = [
-      ...(awardsA.otherMajor || awardsA.awards || []),
-      ...(awardsB.otherMajor || awardsB.awards || []),
-    ];
-    const uniqueOtherAwards = [...new Set(allOtherAwards.map((a) => a.name))];
+      // Add other major awards if any
+      const allOtherAwards = [
+        ...(awardsA.otherMajor || awardsA.awards || []),
+        ...(awardsB.otherMajor || awardsB.awards || []),
+      ];
+      const uniqueOtherAwards = [...new Set(allOtherAwards.map((a) => a.name))];
 
-    uniqueOtherAwards.forEach((awardName) => {
-      const countA =
-        (awardsA.otherMajor || awardsA.awards || []).find(
-          (a) => a.name === awardName
-        )?.count || 0;
-      const countB =
-        (awardsB.otherMajor || awardsB.awards || []).find(
-          (a) => a.name === awardName
-        )?.count || 0;
+      uniqueOtherAwards.forEach((awardName) => {
+        const countA =
+          (awardsA.otherMajor || awardsA.awards || []).find(
+            (a) => a.name === awardName
+          )?.count || 0;
+        const countB =
+          (awardsB.otherMajor || awardsB.awards || []).find(
+            (a) => a.name === awardName
+          )?.count || 0;
 
-      if (countA > 0 || countB > 0) {
-        const row = document.createElement("tr");
+        if (countA > 0 || countB > 0) {
+          const row = document.createElement("tr");
 
-        // Show actual count or 0, not empty
-        const displayA = countA > 0 ? countA : "0";
-        const displayB = countB > 0 ? countB : "0";
+          // Show actual count or 0, not empty
+          const displayA = countA > 0 ? countA : "0";
+          const displayB = countB > 0 ? countB : "0";
 
-        row.innerHTML = `
+          row.innerHTML = `
           <td style="text-align: center; padding: 8px;">${displayA}</td>
           <td style="text-align: center; padding: 8px; font-weight: bold; background-color: #f1f3f4;">${awardName}</td>
           <td style="text-align: center; padding: 8px;">${displayB}</td>
         `;
+          tbody.appendChild(row);
+          awardsAdded++;
+        }
+      });
+
+      // If no awards were added, show a debug message
+      if (awardsAdded === 0) {
+        console.log("No awards found to display");
+        const row = document.createElement("tr");
+        row.innerHTML = `<td colspan="3" style="text-align: center; padding: 12px; color: #666; font-style: italic;">No major awards found for either player</td>`;
         tbody.appendChild(row);
-        awardsAdded++;
+      } else {
+        console.log(`Successfully added ${awardsAdded} award rows`);
       }
-    });
-
-    // If no awards were added, show a debug message
-    if (awardsAdded === 0) {
-      console.log("No awards found to display");
-      const row = document.createElement("tr");
-      row.innerHTML = `<td colspan="3" style="text-align: center; padding: 12px; color: #666; font-style: italic;">No major awards found for either player</td>`;
-      tbody.appendChild(row);
     } else {
-      console.log(`Successfully added ${awardsAdded} award rows`);
+      console.log("No awards data found for either player");
+      console.log("resA.awards:", resA.awards);
+      console.log("resB.awards:", resB.awards);
     }
-  } else {
-    console.log("No awards data found for either player");
-    console.log("resA.awards:", resA.awards);
-    console.log("resB.awards:", resB.awards);
   }
-
   // SEASON MODE HANDLING (unchanged)
   if (mode === "season") {
     const statsA = extractStats(resA);
@@ -633,6 +653,163 @@ async function fetchStats(name, mode, playerType = null) {
     return { error: "Failed to fetch data" };
   }
 }
+
+// Define which stats are "higher is better" vs "lower is better"
+const statConfigurations = {
+    // Higher is better stats
+    'WAR': { higherIsBetter: true },
+    'G': { higherIsBetter: true },
+    'PA': { higherIsBetter: true },
+    'H': { higherIsBetter: true },
+    'HR': { higherIsBetter: true },
+    'RBI': { higherIsBetter: true },
+    'SB': { higherIsBetter: true },
+    'BA': { higherIsBetter: true },
+    'OBP': { higherIsBetter: true },
+    'SLG': { higherIsBetter: true },
+    'OPS': { higherIsBetter: true },
+    'OPS+': { higherIsBetter: true },
+    'Championships': { higherIsBetter: true },
+    'All-Star': { higherIsBetter: true },
+    'Gold Glove': { higherIsBetter: true },
+    'Silver Slugger': { higherIsBetter: true },
+    
+    // Awards - these are the formatted versions that appear in your table
+    '**All-MLB Team - First Team**': { higherIsBetter: true },
+    '**All-MLB Team - Second Team**': { higherIsBetter: true },
+    '**Player of the Month**': { higherIsBetter: true },
+    '**Player of the Week**': { higherIsBetter: true },
+    '**TSN All-Star**': { higherIsBetter: true },
+    '**MVP**': { higherIsBetter: true },
+    '**Cy Young**': { higherIsBetter: true },
+    '**Rookie of the Year**': { higherIsBetter: true },
+    '**World Series MVP**': { higherIsBetter: true },
+    '**All-Star Game MVP**': { higherIsBetter: true },
+    '**Silver Slugger**': { higherIsBetter: true },
+    '**Gold Glove**': { higherIsBetter: true },
+    '**Hank Aaron Award**': { higherIsBetter: true },
+    '**Comeback Player**': { higherIsBetter: true },
+    
+    // Clean versions without asterisks (fallback)
+    'All-MLB Team - First Team': { higherIsBetter: true },
+    'All-MLB Team - Second Team': { higherIsBetter: true },
+    'Player of the Month': { higherIsBetter: true },
+    'Player of the Week': { higherIsBetter: true },
+    'TSN All-Star': { higherIsBetter: true },
+    'MVP': { higherIsBetter: true },
+    'Cy Young': { higherIsBetter: true },
+    'Rookie of the Year': { higherIsBetter: true },
+    'World Series MVP': { higherIsBetter: true },
+    'All-Star Game MVP': { higherIsBetter: true },
+    'Hank Aaron Award': { higherIsBetter: true },
+    'Comeback Player': { higherIsBetter: true },
+    
+    // Pitching stats - lower is better for some
+    'ERA': { higherIsBetter: false },
+    'WHIP': { higherIsBetter: false },
+    'L': { higherIsBetter: false }, // Losses
+    
+    // Pitching stats - higher is better
+    'W': { higherIsBetter: true }, // Wins
+    'K': { higherIsBetter: true }, // Strikeouts  
+    'SO': { higherIsBetter: true }, // Strikeouts
+    'SV': { higherIsBetter: true }, // Saves
+    'IP': { higherIsBetter: true }, // Innings Pitched
+    'CG': { higherIsBetter: true }, // Complete Games
+    'SHO': { higherIsBetter: true } // Shutouts
+};
+
+function highlightBetterStats() {
+    const table = document.getElementById('comparisonTable');
+    if (!table) return;
+    
+    const rows = table.querySelectorAll('tbody tr');
+    
+    rows.forEach(row => {
+        const cells = row.querySelectorAll('td');
+        if (cells.length !== 3) return; // Skip if not a stat row (player A, stat label, player B)
+        
+        const playerACell = cells[0];
+        const statLabelCell = cells[1];
+        const playerBCell = cells[2];
+        
+        const statLabel = statLabelCell.textContent.trim();
+        
+        // Extract award name from formats like "2**All-MLB Team - Second Team**6"
+        let cleanStatLabel = statLabel;
+        const asteriskMatch = statLabel.match(/\*\*(.*?)\*\*/);
+        if (asteriskMatch) {
+            cleanStatLabel = asteriskMatch[1]; // Extract text between ** **
+        }
+        
+        // Try to find matching stat configuration
+        let statConfig = statConfigurations[cleanStatLabel] || 
+                        statConfigurations['**' + cleanStatLabel + '**'] ||
+                        statConfigurations[statLabel];
+        
+        // If still not found, try partial matching for complex award names
+        if (!statConfig) {
+            const labelLower = cleanStatLabel.toLowerCase();
+            for (const [key, config] of Object.entries(statConfigurations)) {
+                const keyLower = key.toLowerCase().replace(/\*\*/g, '');
+                if (labelLower.includes(keyLower) || keyLower.includes(labelLower)) {
+                    statConfig = config;
+                    break;
+                }
+            }
+        }
+        
+        if (!statConfig) {
+            console.log(`No configuration found for stat: "${statLabel}" (cleaned: "${cleanStatLabel}")`);
+            return; // Skip unknown stats
+        }
+        
+        // Parse values - handle different number formats
+        const playerAValue = parseStatValue(playerACell.textContent.trim());
+        const playerBValue = parseStatValue(playerBCell.textContent.trim());
+        
+        if (playerAValue === null || playerBValue === null) return; // Skip if can't parse
+        
+        // Remove existing highlighting
+        playerACell.classList.remove('better-stat', 'tied-stat');
+        playerBCell.classList.remove('better-stat', 'tied-stat');
+        
+        // Apply highlighting based on comparison
+        if (playerAValue === playerBValue) {
+            // Tied stats (optional)
+            playerACell.classList.add('tied-stat');
+            playerBCell.classList.add('tied-stat');
+        } else {
+            const playerABetter = statConfig.higherIsBetter ? 
+                (playerAValue > playerBValue) : 
+                (playerAValue < playerBValue);
+            
+            if (playerABetter) {
+                playerACell.classList.add('better-stat');
+            } else {
+                playerBCell.classList.add('better-stat');
+            }
+        }
+    });
+}
+
+function parseStatValue(valueStr) {
+    // Handle different stat formats
+    if (!valueStr || valueStr === '-' || valueStr === 'N/A') return null;
+    
+    // Remove commas and convert to number
+    const cleanValue = valueStr.replace(/,/g, '');
+    const numValue = parseFloat(cleanValue);
+    
+    return isNaN(numValue) ? null : numValue;
+}
+
+// Function to call highlighting after comparison table is populated
+function applyStatHighlighting() {
+    // Wait a bit for the table to be fully rendered
+    setTimeout(highlightBetterStats, 100);
+}
+
 
 async function handleTwoWayPlayerSelection(originalName, options, mode) {
   return new Promise((resolve) => {
@@ -943,6 +1120,7 @@ async function comparePlayers() {
   const displayNameB = resB?.selected_name || nameB;
 
   updateComparisonTable(resA, resB, displayNameA, displayNameB);
+  applyStatHighlighting();
 }
 
 document.getElementById("viewMode").addEventListener("change", comparePlayers);
@@ -1084,7 +1262,7 @@ async function searchPlayersEnhanced(query, inputId) {
         display: player.display,
       }));
       showDropdown(inputId, formattedPlayers);
-    } 
+    }
   } catch (error) {
     console.error("Enhanced search error:", error);
     if (popularPlayersCache) {
