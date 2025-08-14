@@ -278,18 +278,18 @@ function updateComparisonTable(resA, resB, nameA, nameB) {
   tbody.innerHTML = "";
 
   if (!resA || !resB) {
-    tbody.innerHTML = `<tr><td colspan='4'>Error loading player data.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan='3'>Error loading player data.</td></tr>`;
     return;
   }
   if (resA.error || resB.error) {
-    tbody.innerHTML = `<tr><td colspan='4'>${
+    tbody.innerHTML = `<tr><td colspan='3'>${
       resA.error || resB.error
     }</td></tr>`;
     return;
   }
 
   if (resA.player_type !== resB.player_type) {
-    tbody.innerHTML = `<tr><td colspan='4'>Cannot compare pitcher and hitter statistics.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan='3'>Cannot compare pitcher and hitter statistics.</td></tr>`;
     return;
   }
 
