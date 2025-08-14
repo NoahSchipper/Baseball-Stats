@@ -65,12 +65,12 @@ def get_photo_url_for_player(playerid, conn):
             'tatisfe02': ('Fernando Tatis Jr.', 665487), # Jr. with direct MLB ID
             'ripkeca99': ('Cal Ripken Sr.', None),      # Sr. - was mostly coach/manager
             'ripkeca01': ('Cal Ripken Jr.', 121222),    # Jr. with direct MLB ID
-            'raineti01': ('Tim Raines', 120891),           # Sr. with direct MLB ID
-            'raineti02': ('Tim Raines Jr.', 406428),      # Jr. with direct MLB ID
+            'raineti01': ('Tim Raines', 120891),        # Sr. with direct MLB ID
+            'raineti02': ('Tim Raines Jr.', 406428),    # Jr. with direct MLB ID
             'alomasa01': ('Sandy Alomar Sr.', None),    # Sr.
             'alomasa02': ('Sandy Alomar Jr.', None),    # Jr.
             'rosepe01': ('Pete Rose', None),            # Sr. - let lookup handle it
-            'rosepe02': ('Pete Rose Jr.', 121453),        # Jr. with direct MLB ID
+            'rosepe02': ('Pete Rose Jr.', 121453),      # Jr. with direct MLB ID
         }
         
         # Check if we have a direct mapping for this player
@@ -227,7 +227,146 @@ def detect_player_type(playerid, conn):
         return "hitter"
     else:
         return "pitcher" if pitch_seasons > 0 else "hitter"
+    
+def get_player_awards(playerid, conn):
+    """Get all awards for a player from the lahman database"""
+    try:
+        print(f"Getting awards for playerid: {playerid}")
+        cursor = conn.cursor()
+        
+        print(f"DEBUG: Raw playerid from route: '{playerid}'", repr(playerid))
 
+        # Query for all awards
+        awards_query = """
+        SELECT yearid, awardid, lgid, tie, notes
+        FROM lahman_awardsplayers 
+        WHERE playerid = ?
+        ORDER BY yearid DESC, awardid
+        """
+        
+        cursor.execute(awards_query, (playerid,))
+        awards_data = cursor.fetchall()
+        
+        print(f"Found {len(awards_data)} award records for playerid {playerid}")
+        
+        awards = []
+        for row in awards_data:
+            year, award_id, league, tie, notes = row
+            
+            # Format award name for display
+            award_display = format_award_name(award_id)
+            
+            award_info = {
+                'year': year,
+                'award': award_display,
+                'award_id': award_id,
+                'league': league,
+                'tie': bool(tie) if tie else False,
+                'notes': notes
+            }
+            awards.append(award_info)
+            print(f"  Award: {award_id} ({award_display}) in {year}")
+        
+        # Group and summarize awards
+        award_summary = summarize_awards(awards)
+        print(f"Award summary: {award_summary}")
+        
+        #Get MLB All-Star Game appearances:
+        allstar_games = get_allstar_appearances(playerid, conn)
+        print(f"MLB All-Star Game appearances: {allstar_games}")
+    
+        return {
+            'awards': awards,
+            'summary': award_summary,
+            'mlbAllStar': allstar_games
+        }
+        
+    except Exception as e:
+        print(f"Error getting awards for playerid {playerid}: {e}")
+        import traceback
+        traceback.print_exc()
+        return {'awards': [], 'summary': {}}
+
+def format_award_name(award_id):
+    """Convert award IDs to readable names"""
+    award_names = {
+        'MVP': 'Most Valuable Player',
+        'CYA': 'Cy Young Award',  
+        'CY': 'Cy Young Award',
+        'ROY': 'Rookie of the Year',
+        'GG': 'Gold Glove',
+        'SS': 'Silver Slugger',
+        'AS': 'TSN All-Star Team',
+        'WSMVP': 'World Series MVP',
+        'WS': 'World Series Champion',
+        'ALCS MVP': 'ALCS MVP',
+        'NLCS MVP': 'NLCS MVP', 
+        'ASG MVP': 'All-Star Game MVP',
+        'ASGMVP': 'All-Star Game MVP',
+        'COMEB': 'Comeback Player of the Year',
+        'Hutch': 'Hutch Award',
+        'Lou Gehrig': 'Lou Gehrig Memorial Award',
+        'Babe Ruth': 'Babe Ruth Award',
+        'Roberto Clemente': 'Roberto Clemente Award',
+        'Branch Rickey': 'Branch Rickey Award', 
+        'Hank Aaron': 'Hank Aaron Award',
+        'DHL Hometown Hero': 'DHL Hometown Hero',
+        'Edgar Martinez': 'Edgar Martinez Outstanding DH Award',
+        'Hutch Award': 'Hutch Award',
+        'Man of the Year': 'Man of the Year',
+        'Players Choice': 'Players Choice Award',
+        'Reliever': 'Reliever of the Year',
+        'TSN Fireman': 'The Sporting News Fireman Award',
+        'TSN MVP': 'The Sporting News MVP',
+        'TSN Pitcher': 'The Sporting News Pitcher of the Year', 
+        'TSN Player': 'The Sporting News Player of the Year',
+        'TSN Rookie': 'The Sporting News Rookie of the Year'
+    }
+    
+    return award_names.get(award_id, award_id)
+
+
+def summarize_awards(awards):
+    """Create summary statistics for awards"""
+    summary = {}
+    
+    print(f"Summarizing {len(awards)} awards")
+    
+    # Count by award type
+    for award in awards:
+        award_id = award['award_id']
+        if award_id not in summary:
+            summary[award_id] = {
+                'count': 0,
+                'years': [],
+                'display_name': award['award']
+            }
+        summary[award_id]['count'] += 1
+        summary[award_id]['years'].append(award['year'])
+        print(f"  Added {award_id}: now {summary[award_id]['count']} total")
+    
+    # Sort years for each award
+    for award_id in summary:
+        summary[award_id]['years'].sort(reverse=True)
+    
+    print(f"Final summary: {summary}")
+    return summary
+
+def get_allstar_appearances(playerid, conn):
+    """Get MLB All-Star Game appearances from AllstarFull table"""
+    try:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT COUNT(*) as allstar_games
+            FROM lahman_allstarfull 
+            WHERE playerid = ?
+        """, (playerid,))
+        result = cursor.fetchone()
+        return result[0] if result else 0
+    except Exception as e:
+        print(f"Error getting All-Star appearances: {e}")
+        return 0
+    
 # Add this new route for two-way player handling
 @app.route("/player-two-way")
 def get_player_with_two_way():
@@ -290,65 +429,7 @@ def get_player_with_two_way():
         conn.close()
         return handle_hitter_stats(playerid, mode, photo_url, first, last)
 
-
-# Add these routes to your existing Flask app
 @app.route('/search-players')
-def search_players():
-    """Search for players with fuzzy matching"""
-    query = request.args.get('q', '').strip()
-    
-    if len(query) < 2:
-        return jsonify([])
-    
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        
-        # Clean the query for better matching
-        query_clean = query.lower().strip()
-        search_term = f"%{query_clean}%"
-        
-        # Search in lahman_people table with multiple matching strategies
-        search_query = """
-        SELECT DISTINCT 
-            namefirst || ' ' || namelast as full_name,
-            playerid,
-            CASE 
-                WHEN LOWER(namefirst || ' ' || namelast) LIKE ? THEN 1
-                WHEN LOWER(namelast) LIKE ? THEN 2
-                WHEN LOWER(namefirst) LIKE ? THEN 3
-                ELSE 4
-            END as priority
-        FROM lahman_people 
-        WHERE LOWER(namefirst || ' ' || namelast) LIKE ?
-           OR LOWER(namelast) LIKE ?
-           OR LOWER(namefirst) LIKE ?
-        ORDER BY priority, namelast, namefirst
-        LIMIT 15
-        """
-        
-        cursor.execute(search_query, (
-            f"{query_clean}%",  # Full name starts with query (highest priority)
-            f"{query_clean}%",  # Last name starts with query
-            f"{query_clean}%",  # First name starts with query  
-            search_term,        # Full name contains query anywhere
-            search_term,        # Last name contains query anywhere
-            search_term         # First name contains query anywhere
-        ))
-        
-        results = cursor.fetchall()
-        conn.close()
-        
-        # Format results - just return player names for simple implementation
-        players = [row[0] for row in results]
-        
-        return jsonify(players)
-        
-    except Exception as e:
-        print(f"Database search failed: {e}")
-        return jsonify([])
-
-@app.route('/search-players-enhanced')
 def search_players_enhanced():
     """Enhanced search that handles father/son players and provides disambiguation"""
     query = request.args.get('q', '').strip()
@@ -638,85 +719,7 @@ def get_player_with_disambiguation():
     else:
         conn.close()
         return handle_hitter_stats(playerid, mode, photo_url, first, last)
-
-@app.route('/search-players-detailed')  
-def search_players_detailed():
-    """Search for players with additional info like debut year and position"""
-    query = request.args.get('q', '').strip()
     
-    if len(query) < 2:
-        return jsonify([])
-    
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        
-        query_clean = query.lower().strip()
-        search_term = f"%{query_clean}%"
-        
-        # Enhanced search with additional player info
-        search_query = """
-        SELECT DISTINCT 
-            p.namefirst || ' ' || p.namelast as full_name,
-            p.playerid,
-            p.debut,
-            p.finalgame,
-            CASE 
-                WHEN LOWER(p.namefirst || ' ' || p.namelast) LIKE ? THEN 1
-                WHEN LOWER(p.namelast) LIKE ? THEN 2
-                WHEN LOWER(p.namefirst) LIKE ? THEN 3
-                ELSE 4
-            END as priority,
-            -- Try to get primary position from fielding data
-            (SELECT pos FROM lahman_fielding f 
-             WHERE f.playerid = p.playerid 
-             GROUP BY pos 
-             ORDER BY SUM(g) DESC 
-             LIMIT 1) as primary_pos
-        FROM lahman_people p
-        WHERE LOWER(p.namefirst || ' ' || p.namelast) LIKE ?
-           OR LOWER(p.namelast) LIKE ?
-           OR LOWER(p.namefirst) LIKE ?
-        ORDER BY priority, p.namelast, p.namefirst
-        LIMIT 12
-        """
-        
-        cursor.execute(search_query, (
-            f"{query_clean}%", f"{query_clean}%", f"{query_clean}%",
-            search_term, search_term, search_term
-        ))
-        
-        results = cursor.fetchall()
-        conn.close()
-        
-        players = []
-        for row in results:
-            full_name, playerid, debut, final_game, priority, position = row
-            
-            # Format debut year for display
-            debut_year = debut[:4] if debut else "Unknown"
-            final_year = final_game[:4] if final_game else "Present"
-            
-            # Create display string with additional context
-            if position:
-                display_name = f"{full_name} ({position}, {debut_year})"
-            else:
-                display_name = f"{full_name} ({debut_year})"
-            
-            players.append({
-                'name': full_name,
-                'display': display_name,
-                'playerid': playerid,
-                'debut_year': debut_year,
-                'position': position or 'Unknown'
-            })
-        
-        return jsonify(players)
-        
-    except Exception as e:
-        print(f"Detailed search failed: {e}")
-        return jsonify([])
-
 @app.route('/popular-players')
 def popular_players():
     fallback_players = [
@@ -861,7 +864,9 @@ def handle_pitcher_stats(playerid, conn, mode, photo_url, first, last):
     FROM lahman_pitching WHERE playerid = ?
     """
     df_lahman = pd.read_sql_query(stats_query, conn, params=(playerid,))
-    conn.close()
+    
+    # get awards for this player
+    awards_data = get_player_awards(playerid, conn)
 
     current_year = datetime.date.today().year
     live_row = pd.DataFrame()
@@ -937,11 +942,13 @@ def handle_pitcher_stats(playerid, conn, mode, photo_url, first, last):
             "whip": round(whip, 2)
         }
 
+        conn.close()
         return jsonify({
             "mode": "career",
             "player_type": "pitcher",
             "totals": result,
-            "photo_url": photo_url
+            "photo_url": photo_url,
+            "awards": awards_data
         })
 
     elif mode == "season":
@@ -977,7 +984,8 @@ def handle_pitcher_stats(playerid, conn, mode, photo_url, first, last):
             "mode": "season",
             "player_type": "pitcher",
             "stats": df_result.to_dict(orient="records"),
-            "photo_url": photo_url
+            "photo_url": photo_url,
+            "awards": awards_data
         })
 
     elif mode == "live":
@@ -1062,7 +1070,8 @@ def handle_pitcher_stats(playerid, conn, mode, photo_url, first, last):
             "mode": "live",
             "player_type": "pitcher",
             "stats": result,
-            "photo_url": photo_url
+            "photo_url": photo_url,
+            "awards": awards_data
         })
 
     elif mode == "combined":
@@ -1128,7 +1137,8 @@ def handle_pitcher_stats(playerid, conn, mode, photo_url, first, last):
             "mode": "combined",
             "player_type": "pitcher",
             "totals": result,
-            "photo_url": photo_url
+            "photo_url": photo_url,
+            "awards": awards_data
         })
 
     else:
@@ -1143,8 +1153,9 @@ def handle_hitter_stats(playerid, mode, photo_url, first, last):
     FROM lahman_batting WHERE playerid = ?
     """
     df_lahman = pd.read_sql_query(stats_query, conn, params=(playerid,))
-    conn.close()
 
+    awards_data = get_player_awards(playerid, conn)
+    
     current_year = datetime.date.today().year
     live_row = pd.DataFrame()
     
@@ -1198,11 +1209,13 @@ def handle_hitter_stats(playerid, mode, photo_url, first, last):
             "ops_plus": int(ops_plus)
         }
 
+        conn.close()
         return jsonify({
             "mode": "career",
             "player_type": "hitter",
             "totals": result,
-            "photo_url": photo_url
+            "photo_url": photo_url,
+            "awards": awards_data
         })
 
     elif mode == "season":
@@ -1239,7 +1252,8 @@ def handle_hitter_stats(playerid, mode, photo_url, first, last):
             "mode": "season",
             "player_type": "hitter",
             "stats": df_result.to_dict(orient="records"),
-            "photo_url": photo_url
+            "photo_url": photo_url,
+            "awards": awards_data
         })
 
     elif mode == "live":
@@ -1285,7 +1299,8 @@ def handle_hitter_stats(playerid, mode, photo_url, first, last):
             "mode": "live",
             "player_type": "hitter",
             "stats": result,
-            "photo_url": photo_url
+            "photo_url": photo_url,
+            "awards": awards_data
         })
 
     elif mode == "combined":
@@ -1358,7 +1373,8 @@ def handle_hitter_stats(playerid, mode, photo_url, first, last):
             "mode": "combined",
             "player_type": "hitter",
             "totals": result,
-            "photo_url": photo_url
+            "photo_url": photo_url,
+            "awards": awards_data
         })
 
     else:

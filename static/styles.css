@@ -89,6 +89,9 @@ th {
   padding: 15px 10px;
 }
 
+ .body .td {
+  font-weight: bold;
+}
 .stat-header {
   background-color: #e0e0e0;
   font-size: 1.1rem;
