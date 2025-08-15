@@ -23,7 +23,7 @@
           <label>
             Player A: 
             <div class="input-container">
-              <input type="text" id="playerA" placeholder="Kyle Schwarber" autocomplete="on" />
+              <input type="text" id="playerA" autocomplete="off" />
               <div id="dropdownA" class="dropdown"></div>
             </div>
           </label>
@@ -31,7 +31,7 @@
           <label>
             Player B:
             <div class="input-container">
-              <input type="text" id="playerB" placeholder="Kyle Tucker" autocomplete="on" />
+              <input type="text" id="playerB" autocomplete="off" />
               <div id="dropdownB" class="dropdown"></div>
             </div>
           </label>
@@ -85,7 +85,7 @@
           <label>
             Team A:
             <div class="input-container">
-              <input type="text" id="teamA" placeholder="2023 HOU" autocomplete="on" />
+              <input type="text" id="teamA" placeholder="Cubs" autocomplete="off" />
               <div id="dropdownTeamA" class="dropdown"></div>
             </div>
           </label>
@@ -93,7 +93,7 @@
           <label>
             Team B:
             <div class="input-container">
-              <input type="text" id="teamB" placeholder="2023 LAD" autocomplete="on" />
+              <input type="text" id="teamB" placeholder="Dodgers" autocomplete="off" />
               <div id="dropdownTeamB" class="dropdown"></div>
             </div>
           </label>
@@ -121,7 +121,10 @@
           <thead>
             <tr>
               <th id="teamAName">
-                <div class="player-name">Team A</div>
+                <div class="team-header">
+                  <img id="teamLogoA" class="team-logo" style="display: none;" alt="Team A Logo">
+                  <span class="team-name">Team A</span>
+                </div>
               </th>
               <th>
                 <div class="logo-cell">
@@ -129,7 +132,10 @@
                 </div>
               </th>
               <th id="teamBName">
-                <div class="player-name">Team B</div>
+                <div class="team-header">
+                  <img id="teamLogoB" class="team-logo" style="display: none;" alt="Team B Logo">
+                  <span class="team-name">Team B</span>
+                </div>
               </th>
             </tr>
             <tr>

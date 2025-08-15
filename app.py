@@ -1589,36 +1589,399 @@ def get_team_stats():
         traceback.print_exc()
         return jsonify({"error": f"Internal server error: {str(e)}"}), 500
 
+def get_team_code_from_search(search_term):
+    """
+    Convert team search terms (full names, cities, nicknames) to database team codes
+    Returns the team code that should be used in database queries
+    """
+    search_term = search_term.lower().strip()
+    
+    # Direct team code mappings (if they search the exact code)
+    team_codes = {
+        # Angels - various historical codes
+        'alt': 'ALT',    # Early Angels
+        'cal': 'CAL',    # California Angels  
+        'ana': 'ANA',    # Anaheim Angels
+        'laa': 'LAA',    # Los Angeles Angels (current)
+        
+        # Diamondbacks
+        'ari': 'ARI', 
+        
+        # Braves - historical codes
+        'bsn': 'BSN',    # Boston Braves (historical)
+        'ml1': 'ML1',    # Milwaukee Braves (historical) 
+        'mla': 'MLA',    # Another Milwaukee code
+        'atl': 'ATL',    # Atlanta Braves (current)
+        
+        # Orioles - historical St. Louis Browns
+        'sla': 'SLA',    # St. Louis Browns (historical)
+        'bal': 'BAL',    # Baltimore Orioles (current)
+        
+        # Red Sox
+        'bs1': 'BS1',    # Historical Boston code
+        'bos': 'BOS',    # Boston Red Sox (current)
+        
+        # Cubs
+        'chn': 'CHN',    # Chicago Cubs (historical database code)
+        'chc': 'CHC',    # Chicago Cubs (modern)
+        
+        # White Sox  
+        'cha': 'CHA',    # Chicago White Sox (historical database code)
+        'chw': 'CWS',    # Map CHW to CWS
+        'cws': 'CWS',    # Chicago White Sox (current)
+        
+        # Reds
+        'cn2': 'CN2',    # Historical Cincinnati code
+        'cn3': 'CN3',    # Another historical Cincinnati code  
+        'cin': 'CIN',    # Cincinnati Reds (current)
+        
+        # Indians/Guardians
+        'cle': 'CLE',    # Cleveland (current - covers both Indians and Guardians)
+        
+        # Rockies
+        'col': 'COL',
+        
+        # Tigers
+        'det': 'DET',
+        
+        # Astros
+        'hou': 'HOU',
+        
+        # Royals
+        'kca': 'KCR',    # Map old code to current
+        'kcr': 'KCR',    # Kansas City Royals
+        
+        # Dodgers
+        'br1': 'BR1',    # Brooklyn Dodgers (very old)
+        'br2': 'BR2',    # Brooklyn Dodgers (historical)  
+        'br4': 'BR4',    # Brooklyn Dodgers (another historical)
+        'bro': 'BRO',    # Brooklyn (if it exists)
+        'lad': 'LAN',    # Map LAD to LAN (database uses LAN)
+        'lan': 'LAN',    # Los Angeles Dodgers (database code)
+        
+        # Marlins
+        'fla': 'FLA',    # Florida Marlins (historical)
+        'mia': 'MIA',    # Miami Marlins (current)
+        
+        # Brewers
+        'mil': 'MIL',
+        
+        # Twins
+        'min': 'MIN',
+        
+        # Mets
+        'nym': 'NYM',
+        
+        # Yankees
+        'nyy': 'NYY',
+        
+        # Athletics
+        'pha': 'PHA',    # Philadelphia Athletics (historical)
+        'oak': 'OAK',    # Oakland Athletics (current)
+        
+        # Phillies
+        'phn': 'PHN',    # Historical Philadelphia code
+        'ph3': 'PH3',    # Another historical Philadelphia code
+        'phi': 'PHI',    # Philadelphia Phillies (current)
+        
+        # Pirates
+        'pit': 'PIT',
+        
+        # Padres
+        'sdp': 'SDP',    # San Diego Padres (database code)
+        'sd': 'SDP',     # Map SD to SDP
+        
+        # Mariners
+        'sea': 'SEA',
+        
+        # Giants
+        'ny1': 'NY1',    # New York Giants (historical, if it exists)
+        'sfg': 'SFG',    # San Francisco Giants (database code)
+        'sf': 'SFG',     # Map SF to SFG
+        
+        # Cardinals
+        'stl': 'STL',
+        
+        # Rays
+        'tbd': 'TBR',    # Map old code to current
+        'tbr': 'TBR',    # Tampa Bay Rays
+        'tb': 'TBR',     # Map TB to TBR
+        
+        # Rangers
+        'was': 'WAS',    # Washington Senators (historical, became Rangers)
+        'tex': 'TEX',    # Texas Rangers (current)
+        
+        # Blue Jays
+        'tor': 'TOR',
+        
+        # Nationals
+        'mon': 'MON',    # Montreal Expos (historical)
+        'wsn': 'WSN',    # Washington Nationals (current)
+        'was': 'WSN'     # Map WAS to WSN for Nationals
+    }
+    
+    # Check if it's a direct team code match
+    if search_term in team_codes:
+        return team_codes[search_term]
+    
+    # Full team name and city mappings (keep your existing mappings)
+    name_mappings = {
+        # Angels
+        'angels': 'LAA',
+        'los angeles angels': 'LAA', 
+        'anaheim angels': 'ANA',      # Use historical code for historical name
+        'california angels': 'CAL',   # Use historical code for historical name
+        
+        # Diamondbacks  
+        'diamondbacks': 'ARI',
+        'arizona diamondbacks': 'ARI',
+        'd-backs': 'ARI',
+        'dbacks': 'ARI',
+        
+        # Braves
+        'braves': 'ATL',
+        'atlanta braves': 'ATL',
+        'atlanta': 'ATL',
+        'boston braves': 'BSN',       # Historical
+        'milwaukee braves': 'ML1',    # Historical
+        
+        # Orioles
+        'orioles': 'BAL',
+        'baltimore orioles': 'BAL',
+        'baltimore': 'BAL',
+        'o\'s': 'BAL',
+        'st. louis browns': 'SLA',    # Historical
+        'st louis browns': 'SLA',
+        'browns': 'SLA',
+        
+        # Red Sox
+        'red sox': 'BOS',
+        'boston red sox': 'BOS',
+        'boston': 'BOS',
+        'redsox': 'BOS',
+        
+        # Cubs
+        'cubs': 'CHN',               # Use historical database code
+        'chicago cubs': 'CHN',
+        'cubbies': 'CHN',
+        
+        # White Sox
+        'white sox': 'CHA',          # Use historical database code
+        'chicago white sox': 'CHA',
+        'whitesox': 'CHA',
+        
+        # Reds
+        'reds': 'CIN',
+        'cincinnati reds': 'CIN',
+        'cincinnati': 'CIN',
+        
+        # Guardians/Indians
+        'guardians': 'CLE',
+        'cleveland guardians': 'CLE',
+        'cleveland': 'CLE',
+        'indians': 'CLE',
+        'cleveland indians': 'CLE',
+        
+        # Rockies
+        'rockies': 'COL',
+        'colorado rockies': 'COL',
+        'colorado': 'COL',
+        
+        # Tigers
+        'tigers': 'DET',
+        'detroit tigers': 'DET',
+        'detroit': 'DET',
+        
+        # Astros
+        'astros': 'HOU',
+        'houston astros': 'HOU',
+        'houston': 'HOU',
+        
+        # Royals
+        'royals': 'KCR',
+        'kansas city royals': 'KCR',
+        'kansas city': 'KCR',
+        
+        # Dodgers
+        'dodgers': 'LAN',
+        'los angeles dodgers': 'LAN',
+        'brooklyn dodgers': 'BR2',    # Use historical code for historical name
+        
+        # Marlins
+        'marlins': 'MIA',
+        'miami marlins': 'MIA',
+        'florida marlins': 'FLA',     # Use historical code for historical name
+        'miami': 'MIA',
+        
+        # Brewers
+        'brewers': 'MIL',
+        'milwaukee brewers': 'MIL',
+        'milwaukee': 'MIL',
+        
+        # Twins
+        'twins': 'MIN',
+        'minnesota twins': 'MIN',
+        'minnesota': 'MIN',
+        
+        # Mets
+        'mets': 'NYM',
+        'new york mets': 'NYM',
+        'ny mets': 'NYM',
+        
+        # Yankees
+        'yankees': 'NYY',
+        'new york yankees': 'NYY',
+        'ny yankees': 'NYY',
+        'yanks': 'NYY',
+        
+        # Athletics
+        'athletics': 'OAK',
+        'oakland athletics': 'OAK',
+        'oakland': 'OAK',
+        'a\'s': 'OAK',
+        'as': 'OAK',
+        'philadelphia athletics': 'PHA',  # Historical
+        
+        # Phillies
+        'phillies': 'PHI',
+        'philadelphia phillies': 'PHI',
+        'philadelphia': 'PHI',
+        'phils': 'PHI',
+        
+        # Pirates
+        'pirates': 'PIT',
+        'pittsburgh pirates': 'PIT',
+        'pittsburgh': 'PIT',
+        'bucs': 'PIT',
+        
+        # Padres
+        'padres': 'SDP',
+        'san diego padres': 'SDP',
+        'san diego': 'SDP',
+        
+        # Mariners
+        'mariners': 'SEA',
+        'seattle mariners': 'SEA',
+        'seattle': 'SEA',
+        'm\'s': 'SEA',
+        
+        # Giants
+        'giants': 'SFG',
+        'san francisco giants': 'SFG',
+        'sf giants': 'SFG',
+        'san francisco': 'SFG',
+        
+        # Cardinals
+        'cardinals': 'STL',
+        'st. louis cardinals': 'STL',
+        'st louis cardinals': 'STL',
+        'cards': 'STL',
+        'st. louis': 'STL',
+        'st louis': 'STL',
+        
+        # Rays
+        'rays': 'TBR',
+        'tampa bay rays': 'TBR',
+        'tampa bay': 'TBR',
+        'devil rays': 'TBD',         # Use historical code for historical name
+        'tampa bay devil rays': 'TBD',
+        
+        # Rangers
+        'rangers': 'TEX',
+        'texas rangers': 'TEX',
+        'texas': 'TEX',
+        'washington senators': 'WAS', # Historical (became Rangers)
+        'senators': 'WAS',
+        
+        # Blue Jays
+        'blue jays': 'TOR',
+        'toronto blue jays': 'TOR',
+        'toronto': 'TOR',
+        'jays': 'TOR',
+        'bluejays': 'TOR',
+        
+        # Nationals
+        'nationals': 'WSN',
+        'washington nationals': 'WSN',
+        'washington': 'WSN',
+        'nats': 'WSN',
+        'expos': 'MON',              # Historical Montreal Expos
+        'montreal expos': 'MON'
+    }
+    
+    # Check for exact match first
+    if search_term in name_mappings:
+        return name_mappings[search_term]
+    
+    # Check for partial matches (contains)
+    for name, code in name_mappings.items():
+        if search_term in name or name in search_term:
+            return code
+    
+    # If no match found, return the original search term uppercased
+    return search_term.upper()
+
+
 def parse_team_input(team):
-    """Parse team input like '2023 HOU', 'HOU 2023', or 'HOU'"""
+    """Parse team input like '2024 Dodgers', 'Dodgers 2024', 'Yankees', etc."""
     try:
         parts = team.strip().split()
         
         if len(parts) == 1:
-            # Just team code - use most recent season (default to 2023)
-            return parts[0].upper(), 2023
+            # Just team name/code - use most recent season (default to 2024)
+            team_code = get_team_code_from_search(parts[0])
+            return team_code, 2024
+            
         elif len(parts) == 2:
-            # Year and team code
+            # Year and team, or team with two words
             if parts[0].isdigit():
-                return parts[1].upper(), int(parts[0])
+                # Format: "2024 Dodgers"
+                team_code = get_team_code_from_search(parts[1])
+                return team_code, int(parts[0])
             elif parts[1].isdigit():
-                return parts[0].upper(), int(parts[1])
+                # Format: "Dodgers 2024"  
+                team_code = get_team_code_from_search(parts[0])
+                return team_code, int(parts[1])
+            else:
+                # Two word team name like "Los Angeles" or "New York"
+                full_name = ' '.join(parts)
+                team_code = get_team_code_from_search(full_name)
+                return team_code, 2024
+                
+        else:
+            # More than 2 parts - likely full team name with/without year
+            # Check if last part is a year
+            if parts[-1].isdigit() and len(parts[-1]) == 4:
+                team_name = ' '.join(parts[:-1])
+                team_code = get_team_code_from_search(team_name)
+                return team_code, int(parts[-1])
+            # Check if first part is a year
+            elif parts[0].isdigit() and len(parts[0]) == 4:
+                team_name = ' '.join(parts[1:])
+                team_code = get_team_code_from_search(team_name)
+                return team_code, int(parts[0])
+            else:
+                # Full team name without year
+                full_name = ' '.join(parts)
+                team_code = get_team_code_from_search(full_name)
+                return team_code, 2024
         
-        return team.upper(), 2023
     except Exception as e:
         print(f"Error parsing team input '{team}': {str(e)}")
-        return team.upper(), 2023
+        # Fallback - try to get team code from the whole input
+        team_code = get_team_code_from_search(team)
+        return team_code, 2024
 
 def handle_team_batting_stats(team_id, year, mode):
-    """Get team batting statistics"""
+    """Get team batting statistics - FIXED with correct column names"""
     try:
         conn = sqlite3.connect(DB_PATH)
         print(f"Connected to database: {DB_PATH}")
         
         if mode == "season" and year:
-            # Single season stats - Using lahman_teams table
+            # Fixed query with properly quoted column names
             query = """
-            SELECT yearid, teamid, g, ab, r, h, "2b", "3b", hr, sb, cs, bb, so, hbp, sf
+            SELECT yearid, teamid, g, ab, r, h, "2b", "3b", hr, bb, so, hbp, sf, sb, cs
             FROM lahman_teams 
             WHERE teamid = ? AND yearid = ?
             """
@@ -1626,12 +1989,11 @@ def handle_team_batting_stats(team_id, year, mode):
             df = pd.read_sql_query(query, conn, params=(team_id, year))
             
         elif mode == "franchise":
-            # All-time franchise stats
             query = """
-            SELECT teamid, SUM(G) as G, SUM(AB) as AB, SUM(R) as R, SUM(H) as H, 
-                   SUM("2B") as "2B", SUM("3B") as "3B", SUM(HR) as HR, SUM(RBI) as RBI,
-                   SUM(SB) as SB, SUM(CS) as CS, SUM(BB) as BB, SUM(SO) as SO,
-                   SUM(IBB) as IBB, SUM(HBP) as HBP, SUM(SH) as SH, SUM(SF) as SF, SUM(GIDP) as GIDP
+            SELECT teamid, SUM(g) as g, SUM(ab) as ab, SUM(r) as r, SUM(h) as h, 
+                   SUM("2b") as "2b", SUM("3b") as "3b", SUM(hr) as hr,
+                   SUM(sb) as sb, SUM(cs) as cs, SUM(bb) as bb, SUM(so) as so,
+                   SUM(hbp) as hbp, SUM(sf) as sf
             FROM lahman_teams 
             WHERE teamid = ?
             GROUP BY teamid
@@ -1639,29 +2001,31 @@ def handle_team_batting_stats(team_id, year, mode):
             df = pd.read_sql_query(query, conn, params=(team_id,))
             
         elif mode == "history":
-            # Season-by-season history
             query = """
-            SELECT yearid, teamid, G, AB, R, H, "2B", "3B", HR, RBI, SB, CS, BB, SO, IBB, HBP, SH, SF, GIDP,
-                   W, L, Rank, DivWin, WCWin, LgWin, WSWin, attendance
+            SELECT yearid, teamid, g, ab, r, h, "2b", "3b", hr, sb, cs, bb, so, hbp, sf,
+                   w, l, rank, divwin, wcwin, lgwin, wswin, attendance
             FROM lahman_teams 
             WHERE teamid = ?
             ORDER BY yearid DESC
             """
             df = pd.read_sql_query(query, conn, params=(team_id,))
         else:
-            # Default to season mode
             query = """
-            SELECT yearid, teamid, G, AB, R, H, "2B", "3B", HR, RBI, SB, CS, BB, SO, IBB, HBP, SH, SF, GIDP
+            SELECT yearid, teamid, g, ab, r, h, "2b", "3b", hr, sb, cs, bb, so, hbp, sf
             FROM lahman_teams 
             WHERE teamid = ? AND yearid = ?
             """
-            df = pd.read_sql_query(query, conn, params=(team_id, year or 2023))
+            df = pd.read_sql_query(query, conn, params=(team_id, year or 2024))
             
         conn.close()
         print(f"Query returned {len(df)} rows")
         
         if df.empty:
             return jsonify({"error": f"Team '{team_id}' not found for year {year}"}), 404
+        
+        # Debug: Print raw data
+        if not df.empty:
+            print(f"Raw data sample: {df.iloc[0].to_dict()}")
         
         # Calculate derived stats
         df = calculate_team_batting_stats(df)
@@ -1674,51 +2038,68 @@ def handle_team_batting_stats(team_id, year, mode):
         traceback.print_exc()
         return jsonify({"error": f"Database error: {str(e)}"}), 500
 
+
 def calculate_team_batting_stats(df):
-    """Calculate batting averages, OBP, SLG, etc."""
+    """Calculate batting averages, OBP, SLG, etc. - FIXED"""
     try:
-        # Handle missing columns with defaults
-        required_cols = ['AB', 'H', 'BB', 'HBP', 'SF', '2B', '3B', 'HR']
+        # Convert column names to lowercase to match database
+        df.columns = df.columns.str.lower()
+        
+        # Handle missing columns with defaults - using lowercase names
+        required_cols = ['ab', 'h', 'bb', 'hbp', 'sf', '2b', '3b', 'hr', 'r']
         for col in required_cols:
             if col not in df.columns:
+                print(f"Missing column {col}, setting to 0")
                 df[col] = 0
         
-        # Fill NaN values with 0
-        df = df.fillna(0)
+        # Fill NaN values with 0 and ensure numeric types
+        for col in required_cols:
+            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
+        
+        print(f"After conversion - AB: {df['ab'].iloc[0]}, H: {df['h'].iloc[0]}")
         
         # Calculate batting average
-        df["BA"] = df.apply(lambda row: row["H"] / row["AB"] if row["AB"] > 0 else 0, axis=1)
+        df["ba"] = df.apply(lambda row: row["h"] / row["ab"] if row["ab"] > 0 else 0, axis=1)
         
         # Calculate on-base percentage
-        df["OBP"] = df.apply(lambda row: 
-            (row["H"] + row["BB"] + row["HBP"]) / 
-            (row["AB"] + row["BB"] + row["HBP"] + row["SF"]) 
-            if (row["AB"] + row["BB"] + row["HBP"] + row["SF"]) > 0 else 0, axis=1)
+        df["obp"] = df.apply(lambda row: 
+            (row["h"] + row["bb"] + row["hbp"]) / 
+            (row["ab"] + row["bb"] + row["hbp"] + row["sf"]) 
+            if (row["ab"] + row["bb"] + row["hbp"] + row["sf"]) > 0 else 0, axis=1)
         
         # Calculate singles and total bases
-        df["singles"] = df["H"] - df["2B"] - df["3B"] - df["HR"]
-        df["total_bases"] = df["singles"] + 2*df["2B"] + 3*df["3B"] + 4*df["HR"]
+        df["singles"] = df["h"] - df["2b"] - df["3b"] - df["hr"]
+        df["total_bases"] = df["singles"] + 2*df["2b"] + 3*df["3b"] + 4*df["hr"]
         
         # Calculate slugging percentage
-        df["SLG"] = df.apply(lambda row: row["total_bases"] / row["AB"] if row["AB"] > 0 else 0, axis=1)
+        df["slg"] = df.apply(lambda row: row["total_bases"] / row["ab"] if row["ab"] > 0 else 0, axis=1)
         
         # Calculate OPS
-        df["OPS"] = df["OBP"] + df["SLG"]
+        df["ops"] = df["obp"] + df["slg"]
+        
+        # Add RBI if available (not in your sample but might exist)
+        if 'rbi' not in df.columns:
+            df['rbi'] = 0  # Placeholder
+        
+        print(f"Calculated stats - BA: {df['ba'].iloc[0]:.3f}, OPS: {df['ops'].iloc[0]:.3f}")
         
         return df
         
     except Exception as e:
         print(f"Error calculating batting stats: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return df
 
+
 def handle_team_pitching_stats(team_id, year, mode):
-    """Get team pitching statistics"""
+    """Get team pitching statistics - FIXED with correct column names"""
     try:
         conn = sqlite3.connect(DB_PATH)
         
         if mode == "season" and year:
             query = """
-            SELECT yearid, teamid, W, L, CG, SHO, SV, IPouts, H, ER, HR, BB, SO, BAOpp, ERA, IBB, WP, HBP, BK, BFP, GF, R, SH, SF, GIDP
+            SELECT yearid, teamid, w, l, cg, sho, sv, ipouts, ha, er, hra, bba, soa, era
             FROM lahman_teams 
             WHERE teamid = ? AND yearid = ?
             """
@@ -1726,10 +2107,9 @@ def handle_team_pitching_stats(team_id, year, mode):
             
         elif mode == "franchise":
             query = """
-            SELECT teamid, SUM(W) as W, SUM(L) as L, SUM(CG) as CG, SUM(SHO) as SHO, SUM(SV) as SV,
-                   SUM(IPouts) as IPouts, SUM(H) as H, SUM(ER) as ER, SUM(HR) as HR, SUM(BB) as BB, SUM(SO) as SO,
-                   AVG(BAOpp) as BAOpp, AVG(ERA) as ERA, SUM(IBB) as IBB, SUM(WP) as WP, SUM(HBP) as HBP, 
-                   SUM(BK) as BK, SUM(BFP) as BFP, SUM(GF) as GF, SUM(R) as R, SUM(SH) as SH, SUM(SF) as SF, SUM(GIDP) as GIDP
+            SELECT teamid, SUM(w) as w, SUM(l) as l, SUM(cg) as cg, SUM(sho) as sho, SUM(sv) as sv,
+                   SUM(ipouts) as ipouts, SUM(ha) as ha, SUM(er) as er, SUM(hra) as hra, 
+                   SUM(bba) as bba, SUM(soa) as soa, AVG(era) as era
             FROM lahman_teams 
             WHERE teamid = ?
             GROUP BY teamid
@@ -1738,21 +2118,20 @@ def handle_team_pitching_stats(team_id, year, mode):
             
         elif mode == "history":
             query = """
-            SELECT yearid, teamid, W, L, CG, SHO, SV, IPouts, H, ER, HR, BB, SO, BAOpp, ERA, IBB, WP, HBP, BK, BFP, GF, R, SH, SF, GIDP,
-                   Rank, DivWin, WCWin, LgWin, WSWin, attendance
+            SELECT yearid, teamid, w, l, cg, sho, sv, ipouts, ha, er, hra, bba, soa, era,
+                   rank, divwin, wcwin, lgwin, wswin, attendance
             FROM lahman_teams 
             WHERE teamid = ? 
             ORDER BY yearid DESC
             """
             df = pd.read_sql_query(query, conn, params=(team_id,))
         else:
-            # Default to season mode
             query = """
-            SELECT yearid, teamid, W, L, CG, SHO, SV, IPouts, H, ER, HR, BB, SO, BAOpp, ERA, IBB, WP, HBP, BK, BFP, GF, R, SH, SF, GIDP
+            SELECT yearid, teamid, w, l, cg, sho, sv, ipouts, ha, er, hra, bba, soa, era
             FROM lahman_teams 
             WHERE teamid = ? AND yearid = ?
             """
-            df = pd.read_sql_query(query, conn, params=(team_id, year or 2023))
+            df = pd.read_sql_query(query, conn, params=(team_id, year or 2024))
         
         conn.close()
         
@@ -1770,36 +2149,120 @@ def handle_team_pitching_stats(team_id, year, mode):
         traceback.print_exc()
         return jsonify({"error": f"Pitching stats error: {str(e)}"}), 500
 
+
 def calculate_team_pitching_stats(df):
-    """Calculate team pitching derived stats"""
+    """Calculate team pitching derived stats - FIXED"""
     try:
-        # Handle missing columns
-        required_cols = ['IPouts', 'ER', 'H', 'BB', 'SO']
+        # Convert column names to lowercase
+        df.columns = df.columns.str.lower()
+        
+        # Handle missing columns - using correct lowercase names
+        required_cols = ['ipouts', 'er', 'ha', 'bba', 'soa', 'w', 'l']
         for col in required_cols:
             if col not in df.columns:
+                print(f"Missing pitching column {col}, setting to 0")
                 df[col] = 0
                 
-        # Fill NaN values
-        df = df.fillna(0)
+        # Fill NaN values and ensure numeric types
+        for col in required_cols:
+            df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
         
         # Calculate innings pitched
-        df["IP"] = df["IPouts"] / 3.0
+        df["ip"] = df["ipouts"] / 3.0
         
-        # Calculate ERA (if not already present or recalculate)
-        df["ERA_calc"] = df.apply(lambda row: (row["ER"] * 9) / (row["IPouts"] / 3.0) if row["IPouts"] > 0 else 0, axis=1)
+        # Calculate ERA (recalculate to be sure)
+        df["era_calc"] = df.apply(lambda row: (row["er"] * 9) / (row["ipouts"] / 3.0) if row["ipouts"] > 0 else 0, axis=1)
         
-        # Calculate WHIP
-        df["WHIP"] = df.apply(lambda row: (row["H"] + row["BB"]) / (row["IPouts"] / 3.0) if row["IPouts"] > 0 else 0, axis=1)
+        # Calculate WHIP (using ha and bba - hits allowed and walks allowed)
+        df["whip"] = df.apply(lambda row: (row["ha"] + row["bba"]) / (row["ipouts"] / 3.0) if row["ipouts"] > 0 else 0, axis=1)
         
         # Calculate K/9 and BB/9
-        df["K9"] = df.apply(lambda row: (row["SO"] * 9) / (row["IPouts"] / 3.0) if row["IPouts"] > 0 else 0, axis=1)
-        df["BB9"] = df.apply(lambda row: (row["BB"] * 9) / (row["IPouts"] / 3.0) if row["IPouts"] > 0 else 0, axis=1)
+        df["k9"] = df.apply(lambda row: (row["soa"] * 9) / (row["ipouts"] / 3.0) if row["ipouts"] > 0 else 0, axis=1)
+        df["bb9"] = df.apply(lambda row: (row["bba"] * 9) / (row["ipouts"] / 3.0) if row["ipouts"] > 0 else 0, axis=1)
+        
+        # Rename columns to match your frontend expectations
+        df = df.rename(columns={
+            'ha': 'h',      # hits allowed -> H
+            'bba': 'bb',    # walks allowed -> BB  
+            'soa': 'so',    # strikeouts -> SO
+            'hra': 'hr'     # home runs allowed -> HR
+        })
         
         return df
         
     except Exception as e:
         print(f"Error calculating pitching stats: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return df
+
+
+def format_and_round_stats(stats_dict):
+    """Format and round team stats with proper decimal places and leading zero removal"""
+    
+    # Define which stats need special formatting
+    batting_averages = ['ba', 'obp', 'slg']  # 3 decimals, no leading zero (.258)
+    ops_stats = ['ops']                      # 3 decimals, no leading zero (.847)
+    era_stats = ['era', 'era_calc']         # 2 decimals, keep leading zero (4.32)
+    whip_stats = ['whip']                   # 3 decimals, may or may not have leading zero
+    rate_stats = ['k9', 'bb9']             # 1 decimal, keep leading zero (8.5)
+    ip_stats = ['ip']                       # 1 decimal, keep leading zero (162.1)
+    
+    formatted_stats = {}
+    
+    for key, value in stats_dict.items():
+        if value is None or pd.isna(value):
+            formatted_stats[key] = None
+            continue
+            
+        # Convert to float for processing
+        try:
+            num_value = float(value)
+        except (ValueError, TypeError):
+            formatted_stats[key] = value
+            continue
+        
+        # Apply formatting based on stat type
+        if key in batting_averages:
+            # 3 decimals, remove leading zero for values < 1
+            formatted = f"{num_value:.3f}"
+            if num_value < 1.0 and formatted.startswith('0'):
+                formatted = formatted[1:]  # Remove leading zero
+            formatted_stats[key] = formatted
+            
+        elif key in ops_stats:
+            # 3 decimals, remove leading zero for values < 1
+            formatted = f"{num_value:.3f}"
+            if num_value < 1.0 and formatted.startswith('0'):
+                formatted = formatted[1:]
+            formatted_stats[key] = formatted
+            
+        elif key in era_stats:
+            # 2 decimals, keep all digits
+            formatted_stats[key] = f"{num_value:.2f}"
+            
+        elif key in whip_stats:
+            # 3 decimals, keep all digits (WHIP can be > 1)
+            formatted_stats[key] = f"{num_value:.3f}"
+            
+        elif key in rate_stats:
+            # 1 decimal, keep all digits
+            formatted_stats[key] = f"{num_value:.1f}"
+            
+        elif key in ip_stats:
+            # 1 decimal for innings pitched
+            formatted_stats[key] = f"{num_value:.1f}"
+            
+        else:
+            # Everything else - round to whole numbers
+            if isinstance(num_value, float) and num_value.is_integer():
+                formatted_stats[key] = int(num_value)
+            elif isinstance(num_value, float):
+                formatted_stats[key] = int(round(num_value))
+            else:
+                formatted_stats[key] = value
+    
+    return formatted_stats
 
 def format_team_response(df, stat_type, mode, team_id, year):
     """Format team stats response"""
@@ -1820,13 +2283,18 @@ def format_team_response(df, stat_type, mode, team_id, year):
                     stats[key] = value.item()
                 elif pd.isna(value):
                     stats[key] = None
+            # Apply formatting to the stats dictionary
+            stats = format_and_round_stats(stats)
+            
         elif isinstance(stats, list):
-            for record in stats:
+            for i, record in enumerate(stats):
                 for key, value in record.items():
                     if hasattr(value, 'item'):
                         record[key] = value.item()
                     elif pd.isna(value):
                         record[key] = None
+                # Apply formatting to each record in the list
+                stats[i] = format_and_round_stats(record)
         
         return jsonify({
             "mode": mode,
@@ -1840,54 +2308,435 @@ def format_team_response(df, stat_type, mode, team_id, year):
     except Exception as e:
         print(f"Error formatting team response: {str(e)}")
         return jsonify({"error": f"Response formatting error: {str(e)}"}), 500
-
+    
 def get_team_name(team_id, year=None):
-    """Get full team name"""
+    """Get full team name for display purposes"""
     team_names = {
-        'ANA': 'Los Angeles Angels',
-        'LAA': 'Los Angeles Angels',
+        # Angels - various eras
+        'ALT': 'Los Angeles Angels',      # Early Angels
+        'CAL': 'California Angels',       # California era
+        'ANA': 'Anaheim Angels',         # Anaheim era  
+        'LAA': 'Los Angeles Angels',      # Current era
+        
+        # Diamondbacks
         'ARI': 'Arizona Diamondbacks', 
-        'ATL': 'Atlanta Braves',
-        'BAL': 'Baltimore Orioles',
-        'BOS': 'Boston Red Sox',
-        'CHC': 'Chicago Cubs',
-        'CHW': 'Chicago White Sox',
-        'CWS': 'Chicago White Sox',
-        'CIN': 'Cincinnati Reds',
-        'CLE': 'Cleveland Guardians',
+        
+        # Braves - moved cities
+        'BSN': 'Boston Braves',          # Boston era
+        'ML1': 'Milwaukee Braves',       # Milwaukee era
+        'MLA': 'Milwaukee Braves',       # Alternative Milwaukee code
+        'ATL': 'Atlanta Braves',         # Current Atlanta era
+        
+        # Orioles / St. Louis Browns
+        'SLA': 'St. Louis Browns',       # Before moving to Baltimore
+        'BAL': 'Baltimore Orioles',      # Current
+        
+        # Red Sox
+        'BS1': 'Boston Red Sox',         # Historical code
+        'BOS': 'Boston Red Sox',         # Current
+        
+        # Cubs
+        'CHN': 'Chicago Cubs',           # Database code
+        'CHC': 'Chicago Cubs',           # Alternative
+        
+        # White Sox
+        'CHA': 'Chicago White Sox',      # Database code  
+        'CHW': 'Chicago White Sox',      # Alternative
+        'CWS': 'Chicago White Sox',      # Alternative
+        
+        # Reds
+        'CN2': 'Cincinnati Reds',        # Historical code
+        'CN3': 'Cincinnati Reds',        # Another historical code
+        'CIN': 'Cincinnati Reds',        # Current
+        
+        # Indians/Guardians
+        'CLE': 'Cleveland Guardians',    # Current (covers both Indians/Guardians)
+        
+        # Rockies
         'COL': 'Colorado Rockies',
+        
+        # Tigers
         'DET': 'Detroit Tigers',
+        
+        # Astros
         'HOU': 'Houston Astros',
-        'KCA': 'Kansas City Royals',
-        'KCR': 'Kansas City Royals',
-        'LAD': 'Los Angeles Dodgers',
-        'LAN': 'Los Angeles Dodgers',
-        'MIA': 'Miami Marlins',
-        'FLA': 'Miami Marlins',
+        
+        # Royals
+        'KCA': 'Kansas City Royals',     # Historical code
+        'KCR': 'Kansas City Royals',     # Current
+        
+        # Dodgers - Brooklyn to LA
+        'BR1': 'Brooklyn Dodgers',       # Early Brooklyn era
+        'BR2': 'Brooklyn Dodgers',       # Brooklyn era
+        'BR4': 'Brooklyn Dodgers',       # Another Brooklyn code
+        'BRO': 'Brooklyn Dodgers',       # If this code exists
+        'LAD': 'Los Angeles Dodgers',    # Alternative current
+        'LAN': 'Los Angeles Dodgers',    # Database code
+        
+        # Marlins
+        'FLA': 'Florida Marlins',        # Florida era
+        'MIA': 'Miami Marlins',          # Current Miami era
+        
+        # Brewers
         'MIL': 'Milwaukee Brewers',
+        
+        # Twins
         'MIN': 'Minnesota Twins',
+        
+        # Mets
         'NYM': 'New York Mets',
+        
+        # Yankees
         'NYY': 'New York Yankees',
-        'OAK': 'Oakland Athletics',
-        'PHI': 'Philadelphia Phillies',
+        
+        # Athletics - Philadelphia to Oakland
+        'PHA': 'Philadelphia Athletics',  # Philadelphia era
+        'OAK': 'Oakland Athletics',       # Current Oakland era
+        
+        # Phillies
+        'PHN': 'Philadelphia Phillies',  # Historical code
+        'PH3': 'Philadelphia Phillies',  # Another historical code
+        'PHI': 'Philadelphia Phillies',  # Current
+        
+        # Pirates
         'PIT': 'Pittsburgh Pirates',
-        'SDP': 'San Diego Padres',
-        'SD': 'San Diego Padres',
+        
+        # Padres
+        'SDP': 'San Diego Padres',       # Database code
+        'SD': 'San Diego Padres',        # Alternative
+        
+        # Mariners
         'SEA': 'Seattle Mariners',
-        'SFG': 'San Francisco Giants',
-        'SF': 'San Francisco Giants',
+        
+        # Giants - New York to San Francisco
+        'NY1': 'New York Giants',        # If this code exists
+        'SFG': 'San Francisco Giants',   # Current
+        'SF': 'San Francisco Giants',    # Alternative
+        
+        # Cardinals
         'STL': 'St. Louis Cardinals',
-        'TBD': 'Tampa Bay Rays',
-        'TBR': 'Tampa Bay Rays',
-        'TB': 'Tampa Bay Rays',
-        'TEX': 'Texas Rangers',
+        
+        # Rays
+        'TBD': 'Tampa Bay Devil Rays',   # Devil Rays era
+        'TBR': 'Tampa Bay Rays',         # Current Rays era
+        'TB': 'Tampa Bay Rays',          # Alternative
+        
+        # Rangers / Washington Senators
+        'WAS': 'Washington Senators',    # Before moving to Texas
+        'TEX': 'Texas Rangers',          # Current
+        
+        # Blue Jays
         'TOR': 'Toronto Blue Jays',
-        'WSN': 'Washington Nationals',
-        'WAS': 'Washington Nationals'
+        
+        # Nationals / Montreal Expos
+        'MON': 'Montreal Expos',         # Montreal era
+        'WSN': 'Washington Nationals',   # Current
+        'WAS': 'Washington Nationals'    # Alternative (though might conflict with Senators)
     }
     
     base_name = team_names.get(team_id.upper(), team_id)
     return f"{year} {base_name}" if year else base_name
+
+def get_team_logo_url(team_id, year=None):
+    """Get team logo URL using MLB static image service and historical mappings"""
+    
+    # Map your database team codes to MLB's current team abbreviations
+    mlb_team_mapping = {
+        # Angels
+        'ALT': 'LAA',  # Early Angels -> current Angels
+        'CAL': 'LAA',  # California Angels -> current Angels  
+        'ANA': 'LAA',  # Anaheim Angels -> current Angels
+        'LAA': 'LAA',
+        
+        # Diamondbacks
+        'ARI': 'ARI',
+        
+        # Braves
+        'BSN': 'ATL',  # Boston Braves -> Atlanta Braves
+        'ML1': 'ATL',  # Milwaukee Braves -> Atlanta Braves
+        'MLA': 'ATL',  # Milwaukee Braves -> Atlanta Braves
+        'ATL': 'ATL',
+        
+        # Orioles
+        'SLA': 'BAL',  # St. Louis Browns -> Baltimore Orioles
+        'BAL': 'BAL',
+        
+        # Red Sox
+        'BS1': 'BOS',
+        'BOS': 'BOS',
+        
+        # Cubs
+        'CHN': 'CHC',
+        'CHC': 'CHC',
+        
+        # White Sox
+        'CHA': 'CWS',
+        'CHW': 'CWS',
+        'CWS': 'CWS',
+        
+        # Reds
+        'CN2': 'CIN',
+        'CN3': 'CIN',
+        'CIN': 'CIN',
+        
+        # Indians/Guardians (year-dependent)
+        'CLE': 'CLE',  # Will handle name change below
+        
+        # Rockies
+        'COL': 'COL',
+        
+        # Tigers
+        'DET': 'DET',
+        
+        # Astros
+        'HOU': 'HOU',
+        
+        # Royals
+        'KCA': 'KC',
+        'KCR': 'KC',
+        
+        # Dodgers
+        'BR1': 'LAD',  # Brooklyn -> LA Dodgers
+        'BR2': 'LAD',
+        'BR4': 'LAD',
+        'BRO': 'LAD',
+        'LAD': 'LAD',
+        'LAN': 'LAD',
+        
+        # Marlins
+        'FLA': 'MIA',  # Florida -> Miami Marlins
+        'MIA': 'MIA',
+        
+        # Brewers
+        'MIL': 'MIL',
+        
+        # Twins
+        'MIN': 'MIN',
+        
+        # Mets
+        'NYM': 'NYM',
+        
+        # Yankees
+        'NYY': 'NYY',
+        
+        # Athletics
+        'PHA': 'OAK',  # Philadelphia -> Oakland Athletics
+        'OAK': 'OAK',
+        
+        # Phillies
+        'PHN': 'PHI',
+        'PH3': 'PHI',
+        'PHI': 'PHI',
+        
+        # Pirates
+        'PIT': 'PIT',
+        
+        # Padres
+        'SDP': 'SD',
+        'SD': 'SD',
+        
+        # Mariners
+        'SEA': 'SEA',
+        
+        # Giants
+        'NY1': 'SF',   # NY Giants -> SF Giants
+        'SFG': 'SF',
+        'SF': 'SF',
+        
+        # Cardinals
+        'STL': 'STL',
+        
+        # Rays
+        'TBD': 'TB',   # Devil Rays -> Rays
+        'TBR': 'TB',
+        'TB': 'TB',
+        
+        # Rangers
+        'WAS': 'TEX',  # Washington Senators -> Texas Rangers
+        'TEX': 'TEX',
+        
+        # Blue Jays
+        'TOR': 'TOR',
+        
+        # Nationals
+        'MON': 'WSH',  # Montreal Expos -> Washington Nationals
+        'WSN': 'WSH',
+        'WAS': 'WSH'
+    }
+    
+    # Get the modern MLB team code
+    modern_team_code = mlb_team_mapping.get(team_id.upper(), team_id.upper())
+    
+    # Handle special year-based cases
+    if year:
+        # Cleveland name change in 2022
+        if team_id.upper() == 'CLE':
+            if year >= 2022:
+                team_name = 'guardians'
+            else:
+                team_name = 'indians'
+            # MLB might have different logos for historical vs current
+            return f"https://www.mlbstatic.com/team-logos/{modern_team_code.lower()}.svg"
+        
+        # Marlins name change
+        if team_id.upper() in ['FLA', 'MIA']:
+            if year < 2012:
+                # Might want to use a historical Florida Marlins logo
+                pass
+            # Fall through to use current logo
+    
+    # Primary logo URL patterns to try
+    logo_urls = [
+        f"https://www.mlbstatic.com/team-logos/{modern_team_code.lower()}.svg",
+        f"https://img.mlbstatic.com/mlb-photos/image/upload/v1/team/{modern_team_code.lower()}/logo/current",
+        f"https://www.mlbstatic.com/team-logos/team-cap-on-light/{modern_team_code.lower()}.svg",
+        f"https://securea.mlb.com/mlb/images/team_logos/logo_{modern_team_code.lower()}_79x76.gif"
+    ]
+    
+    return logo_urls[0]  # Return primary URL
+
+
+def get_team_logo_with_fallback(team_id, year=None):
+    """Get team logo with multiple fallback options"""
+    try:
+        # Primary: MLB Static
+        primary_url = get_team_logo_url(team_id, year)
+        
+        # Fallback options
+        modern_team = get_modern_team_code(team_id)
+        
+        fallback_urls = [
+            f"https://logos.fansided.com/team/{modern_team.lower()}-logo-primary.png",
+        ]
+        
+        return {
+            'primary': primary_url,
+            'fallbacks': fallback_urls
+        }
+        
+    except Exception as e:
+        print(f"Error getting team logo: {e}")
+        return None
+
+
+def get_modern_team_code(team_id):
+    """Convert historical team codes to modern equivalents"""
+    mapping = {
+        'ALT': 'LAA', 'CAL': 'LAA', 'ANA': 'LAA', 'LAA': 'LAA',
+        'BSN': 'ATL', 'ML1': 'ATL', 'MLA': 'ATL', 'ATL': 'ATL', 
+        'SLA': 'BAL', 'BAL': 'BAL',
+        'CHN': 'CHC', 'CHC': 'CHC',
+        'CHA': 'CWS', 'CHW': 'CWS', 'CWS': 'CWS',
+        'BR1': 'LAD', 'BR2': 'LAD', 'BR4': 'LAD', 'BRO': 'LAD', 'LAN': 'LAD', 'LAD': 'LAD',
+        'FLA': 'MIA', 'MIA': 'MIA',
+        'PHA': 'OAK', 'OAK': 'OAK',
+        'SDP': 'SD', 'SD': 'SD',
+        'TBD': 'TB', 'TBR': 'TB', 'TB': 'TB',
+        'WAS': 'TEX', 'TEX': 'TEX',  # Senators -> Rangers
+        'MON': 'WSH', 'WSN': 'WSH', 'WAS': 'WSH'  # Expos -> Nationals
+    }
+    return mapping.get(team_id.upper(), team_id.upper())
+
+
+def get_historical_team_logo(team_id, year):
+    """Get historically accurate team logos for specific years"""
+    
+    # Define logo changes by team and year
+    historical_logos = {
+        'LAA': {  # Angels logo changes
+            'ranges': [
+                (1961, 1970, 'california_angels_1961'),
+                (1971, 1985, 'california_angels_1971'), 
+                (1986, 1992, 'california_angels_1986'),
+                (1993, 1996, 'california_angels_1993'),
+                (1997, 2001, 'anaheim_angels_1997'),
+                (2002, 2003, 'anaheim_angels_2002'),
+                (2004, 2024, 'los_angeles_angels_2004')
+            ]
+        },
+        'MIA': {  # Marlins logo changes
+            'ranges': [
+                (1993, 2011, 'florida_marlins_1993'),
+                (2012, 2018, 'miami_marlins_2012'),
+                (2019, 2024, 'miami_marlins_2019')
+            ]
+        },
+        'TB': {  # Rays logo changes
+            'ranges': [
+                (1998, 2007, 'devil_rays_1998'),
+                (2008, 2024, 'rays_2008')
+            ]
+        },
+        'CLE': {  # Indians/Guardians
+            'ranges': [
+                (1901, 1914, 'cleveland_blues'),
+                (1915, 2021, 'cleveland_indians'),
+                (2022, 2024, 'cleveland_guardians')
+            ]
+        }
+        # Add more teams with significant logo changes
+    }
+    
+    modern_code = get_modern_team_code(team_id)
+    
+    if modern_code in historical_logos and year:
+        for start_year, end_year, logo_key in historical_logos[modern_code]['ranges']:
+            if start_year <= year <= end_year:
+                return f"https://content.sportslogos.net/logos/53/historical/{logo_key}.png"
+    
+    # Fallback to current logo
+    return get_team_logo_url(team_id, year)
+
+
+# Integration with your existing code
+def format_team_response(df, stat_type, mode, team_id, year):
+    """Enhanced format_team_response with team logo - UPDATE YOUR EXISTING FUNCTION"""
+    try:
+        team_name = get_team_name(team_id, year)
+        
+        # Get team logo
+        team_logo = get_team_logo_with_fallback(team_id, year)
+        
+        if mode == "season" or mode == "franchise":
+            stats = df.to_dict(orient="records")[0] if not df.empty else {}
+        elif mode == "history":
+            stats = df.to_dict(orient="records")
+        else:
+            stats = df.to_dict(orient="records")[0] if not df.empty else {}
+        
+        # Convert numpy types to Python types for JSON serialization
+        if isinstance(stats, dict):
+            for key, value in stats.items():
+                if hasattr(value, 'item'):  # numpy scalar
+                    stats[key] = value.item()
+                elif pd.isna(value):
+                    stats[key] = None
+            # Apply formatting to the stats dictionary
+            stats = format_and_round_stats(stats)
+            
+        elif isinstance(stats, list):
+            for i, record in enumerate(stats):
+                for key, value in record.items():
+                    if hasattr(value, 'item'):
+                        record[key] = value.item()
+                    elif pd.isna(value):
+                        record[key] = None
+                # Apply formatting to each record in the list
+                stats[i] = format_and_round_stats(record)
+        
+        return jsonify({
+            "mode": mode,
+            "team_type": stat_type,
+            "team_id": team_id,
+            "team_name": team_name,
+            "year": year,
+            "team_logo": team_logo,  # Add logo URLs
+            "stats": stats
+        })
+        
+    except Exception as e:
+        print(f"Error formatting team response: {str(e)}")
+        return jsonify({"error": f"Response formatting error: {str(e)}"}), 500
 
 if __name__ == "__main__":
     app.run(debug=True)

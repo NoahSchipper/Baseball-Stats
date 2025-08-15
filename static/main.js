@@ -1431,36 +1431,35 @@ const comparisonModes = {
 
 // Team stat label mappings
 const teamBattingLabelMap = {
-    R: "Runs",
-    H: "Hits", 
-    HR: "Home Runs",
-    RBI: "RBI",
-    SB: "Stolen Bases",
-    BB: "Walks",
-    SO: "Strikeouts",
-    BA: "Batting Avg",
-    OBP: "On-Base %",
-    SLG: "Slugging %", 
-    OPS: "OPS",
-    GIDP: "Double Plays"
+    r: "Runs",
+    h: "Hits", 
+    hr: "Home Runs",
+    rbi: "RBI",
+    sb: "Stolen Bases",
+    bb: "Walks",
+    so: "Strikeouts",
+    ba: "Batting Avg",    // lowercase
+    obp: "On-Base %",     // lowercase
+    slg: "Slugging %",    // lowercase
+    ops: "OPS"            // lowercase
 };
 
 const teamPitchingLabelMap = {
-    W: "Wins",
-    L: "Losses", 
-    CG: "Complete Games",
-    SHO: "Shutouts",
-    SV: "Saves",
-    IP: "Innings Pitched",
-    H: "Hits Allowed",
-    ER: "Earned Runs",
-    HR: "Home Runs Allowed", 
-    BB: "Walks",
-    SO: "Strikeouts",
-    ERA: "ERA",
-    WHIP: "WHIP",
-    K9: "K/9",
-    BB9: "BB/9"
+    w: "Wins",
+    l: "Losses", 
+    cg: "Complete Games",
+    sho: "Shutouts",
+    sv: "Saves",
+    ip: "Innings Pitched",
+    h: "Hits Allowed",
+    er: "Earned Runs",
+    hr: "Home Runs Allowed", 
+    bb: "Walks",
+    so: "Strikeouts",
+    era: "ERA",           // lowercase
+    whip: "WHIP",         // lowercase
+    k9: "K/9",            // lowercase
+    bb9: "BB/9"           // lowercase
 };
 
 // Enhanced fetch function for teams
@@ -1491,12 +1490,27 @@ async function compareTeams() {
     const tbody = document.getElementById("teamComparisonBody");
     tbody.innerHTML = `<tr><td colspan='3' style='text-align: center; padding: 20px;'>Loading team data...</td></tr>`;
     
+    // Clear existing logos
+    const logoA = document.getElementById("teamLogoA");
+    const logoB = document.getElementById("teamLogoB");
+    if (logoA) logoA.style.display = 'none';
+    if (logoB) logoB.style.display = 'none';
+
     const [resA, resB] = await Promise.all([
         fetchTeamStats(teamA, mode, statType),
         fetchTeamStats(teamB, mode, statType)
     ]);
     
     updateTeamComparisonTable(resA, resB, teamA, teamB, statType);
+
+    // Load team logos
+    if (resA?.team_logo && logoA) {
+        loadTeamLogo(resA.team_logo, logoA, resA.team_name);
+    }
+    
+    if (resB?.team_logo && logoB) {
+        loadTeamLogo(resB.team_logo, logoB, resB.team_name);
+    }
 }
 
 function updateTeamComparisonTable(resA, resB, teamA, teamB, statType) {
@@ -1504,9 +1518,24 @@ function updateTeamComparisonTable(resA, resB, teamA, teamB, statType) {
     const thA = document.getElementById("teamAName");
     const thB = document.getElementById("teamBName");
     
-    thA.textContent = resA?.team_name || teamA;
-    thB.textContent = resB?.team_name || teamB;
+    // thA.textContent = resA?.team_name || teamA;
+   // thB.textContent = resB?.team_name || teamB;
     
+     // Update headers with team names
+    thA.innerHTML = `
+        <div class="team-header">
+            <img id="teamLogoA" class="team-logo" style="display: none;" alt="Team A Logo">
+            <span class="team-name">${resA?.team_name || teamA}</span>
+        </div>
+    `;
+    
+    thB.innerHTML = `
+        <div class="team-header">
+            <img id="teamLogoB" class="team-logo" style="display: none;" alt="Team B Logo">
+            <span class="team-name">${resB?.team_name || teamB}</span>
+        </div>
+    `;
+
     tbody.innerHTML = "";
     
     if (!resA || !resB) {
@@ -1572,12 +1601,97 @@ function updateTeamComparisonTable(resA, resB, teamA, teamB, statType) {
         hideAllDropdowns();
       }
 
+// Enhanced team logo loading function with fallback support
+function loadTeamLogo(logoData, imgElement, teamName = "") {
+    if (!logoData || !imgElement) {
+        setDefaultTeamLogo(imgElement);
+        return;
+    }
+
+    // Build array of URLs to try (primary + fallbacks)
+    const urlsToTry = [];
+    
+    if (logoData.primary) {
+        urlsToTry.push(logoData.primary);
+    }
+    
+    if (logoData.fallbacks && Array.isArray(logoData.fallbacks)) {
+        urlsToTry.push(...logoData.fallbacks);
+    }
+    
+    // Try each URL in sequence
+    tryNextLogoUrl(urlsToTry, 0, imgElement, teamName);
+}
+
+function tryNextLogoUrl(urls, index, imgElement, teamName) {
+    if (index >= urls.length) {
+        // All URLs failed, use default
+        setDefaultTeamLogo(imgElement, teamName);
+        return;
+    }
+    
+    const img = new Image();
+    
+    img.onload = function() {
+        imgElement.src = urls[index];
+        imgElement.style.display = 'block';
+        imgElement.onerror = null; // Clear any previous error handlers
+    };
+    
+    img.onerror = function() {
+        console.log(`Logo URL failed: ${urls[index]}`);
+        // Try next URL
+        tryNextLogoUrl(urls, index + 1, imgElement, teamName);
+    };
+    
+    // Set a timeout for slow-loading images
+    const timeout = setTimeout(() => {
+        img.onload = null;
+        img.onerror = null;
+        tryNextLogoUrl(urls, index + 1, imgElement, teamName);
+    }, 5000); // 5 second timeout
+    
+    img.onload = function() {
+        clearTimeout(timeout);
+        imgElement.src = urls[index];
+        imgElement.style.display = 'block';
+    };
+    
+    img.src = urls[index];
+}
+
+function setDefaultTeamLogo(imgElement, teamName = "") {
+    // You can create a simple default logo or use a placeholder
+    const defaultLogoSvg = createDefaultTeamLogo(teamName);
+    imgElement.src = defaultLogoSvg;
+    imgElement.style.display = 'block';
+}
+
+function createDefaultTeamLogo(teamName) {
+    // Create a simple SVG logo as fallback
+    const initials = teamName.split(' ').map(word => word[0]).join('').toUpperCase().slice(0, 3);
+    
+    const svg = `
+        <svg width="60" height="60" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="30" cy="30" r="28" fill="#003366" stroke="#ffffff" stroke-width="2"/>
+            <text x="30" y="38" text-anchor="middle" fill="white" font-family="Arial, sans-serif" font-size="14" font-weight="bold">
+                ${initials || '?'}
+            </text>
+        </svg>
+    `;
+    
+    return 'data:image/svg+xml;base64,' + btoa(svg);
+}
+      
 // Initialize everything when DOM is ready
 document.addEventListener("DOMContentLoaded", () => {
   // Set default values
   document.getElementById("playerA").value = "Kyle Schwarber";
   document.getElementById("playerB").value = "Kyle Tucker";
   document.getElementById("viewMode").value = "combined";
+
+  document.getElementById("teamA").value = "Cubs";
+  document.getElementById("teamB").value = "Dodgers";
 
   // Initialize custom dropdown functionality
   setupPlayerAutofill();
