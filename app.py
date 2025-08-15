@@ -1921,16 +1921,15 @@ def get_team_code_from_search(search_term):
     # If no match found, return the original search term uppercased
     return search_term.upper()
 
-
 def parse_team_input(team):
     """Parse team input like '2024 Dodgers', 'Dodgers 2024', 'Yankees', etc."""
     try:
         parts = team.strip().split()
         
         if len(parts) == 1:
-            # Just team name/code - use most recent season (default to 2024)
+            # Just team name/code - return None for year (will be handled by mode)
             team_code = get_team_code_from_search(parts[0])
-            return team_code, 2024
+            return team_code, None  # Changed from 2024 to None
             
         elif len(parts) == 2:
             # Year and team, or team with two words
@@ -1946,7 +1945,7 @@ def parse_team_input(team):
                 # Two word team name like "Los Angeles" or "New York"
                 full_name = ' '.join(parts)
                 team_code = get_team_code_from_search(full_name)
-                return team_code, 2024
+                return team_code, None  # Changed from 2024 to None
                 
         else:
             # More than 2 parts - likely full team name with/without year
@@ -1964,33 +1963,39 @@ def parse_team_input(team):
                 # Full team name without year
                 full_name = ' '.join(parts)
                 team_code = get_team_code_from_search(full_name)
-                return team_code, 2024
+                return team_code, None  # Changed from 2024 to None
         
     except Exception as e:
         print(f"Error parsing team input '{team}': {str(e)}")
         # Fallback - try to get team code from the whole input
         team_code = get_team_code_from_search(team)
-        return team_code, 2024
+        return team_code, None  # Changed from 2024 to None
+
 
 def handle_team_batting_stats(team_id, year, mode):
-    """Get team batting statistics - FIXED with correct column names"""
+    """Get team batting statistics - FIXED with correct column names and franchise mode"""
     try:
         conn = sqlite3.connect(DB_PATH)
         print(f"Connected to database: {DB_PATH}")
+        print(f"handle_team_batting_stats called with: team_id='{team_id}', year={year}, mode='{mode}'")
         
-        if mode == "season" and year:
-            # Fixed query with properly quoted column names
+        if mode == "season":
+            # For season mode, use the provided year or default to 2024
+            actual_year = year or 2024
             query = """
             SELECT yearid, teamid, g, ab, r, h, "2b", "3b", hr, bb, so, hbp, sf, sb, cs
             FROM lahman_teams 
             WHERE teamid = ? AND yearid = ?
             """
-            print(f"Executing query: {query} with params: ({team_id}, {year})")
-            df = pd.read_sql_query(query, conn, params=(team_id, year))
+            print(f"Executing SEASON query with params: ({team_id}, {actual_year})")
+            df = pd.read_sql_query(query, conn, params=(team_id, actual_year))
             
-        elif mode == "franchise":
+        elif mode in ["franchise", "career"]:
+            # For franchise/career mode, ignore the year completely - aggregate all years
             query = """
-            SELECT teamid, SUM(g) as g, SUM(ab) as ab, SUM(r) as r, SUM(h) as h, 
+            SELECT teamid, 
+                   COUNT(*) as seasons,
+                   SUM(g) as g, SUM(ab) as ab, SUM(r) as r, SUM(h) as h, 
                    SUM("2b") as "2b", SUM("3b") as "3b", SUM(hr) as hr,
                    SUM(sb) as sb, SUM(cs) as cs, SUM(bb) as bb, SUM(so) as so,
                    SUM(hbp) as hbp, SUM(sf) as sf
@@ -1998,9 +2003,14 @@ def handle_team_batting_stats(team_id, year, mode):
             WHERE teamid = ?
             GROUP BY teamid
             """
+            print(f"Executing FRANCHISE/CAREER query with params: ({team_id},)")
             df = pd.read_sql_query(query, conn, params=(team_id,))
+            print(f"Franchise/Career query returned {len(df)} rows")
+            if not df.empty:
+                print(f"Franchise data sample: seasons={df.iloc[0].get('seasons', 'N/A')}, games={df.iloc[0].get('g', 'N/A')}")
             
         elif mode == "history":
+            # For history mode, get all seasons for the team
             query = """
             SELECT yearid, teamid, g, ab, r, h, "2b", "3b", hr, sb, cs, bb, so, hbp, sf,
                    w, l, rank, divwin, wcwin, lgwin, wswin, attendance
@@ -2008,20 +2018,29 @@ def handle_team_batting_stats(team_id, year, mode):
             WHERE teamid = ?
             ORDER BY yearid DESC
             """
+            print(f"Executing HISTORY query with params: ({team_id},)")
             df = pd.read_sql_query(query, conn, params=(team_id,))
+            
         else:
+            # Default to season mode
+            actual_year = year or 2024
             query = """
             SELECT yearid, teamid, g, ab, r, h, "2b", "3b", hr, sb, cs, bb, so, hbp, sf
             FROM lahman_teams 
             WHERE teamid = ? AND yearid = ?
             """
-            df = pd.read_sql_query(query, conn, params=(team_id, year or 2024))
+            print(f"Executing DEFAULT query with params: ({team_id}, {actual_year})")
+            df = pd.read_sql_query(query, conn, params=(team_id, actual_year))
             
         conn.close()
         print(f"Query returned {len(df)} rows")
         
         if df.empty:
-            return jsonify({"error": f"Team '{team_id}' not found for year {year}"}), 404
+            if mode in ["franchise", "career"]:
+                return jsonify({"error": f"Team '{team_id}' not found in database"}), 404
+            else:
+                actual_year = year or 2024
+                return jsonify({"error": f"Team '{team_id}' not found for year {actual_year}"}), 404
         
         # Debug: Print raw data
         if not df.empty:
@@ -2037,8 +2056,7 @@ def handle_team_batting_stats(team_id, year, mode):
         import traceback
         traceback.print_exc()
         return jsonify({"error": f"Database error: {str(e)}"}), 500
-
-
+    
 def calculate_team_batting_stats(df):
     """Calculate batting averages, OBP, SLG, etc. - FIXED"""
     try:
@@ -2093,30 +2111,42 @@ def calculate_team_batting_stats(df):
 
 
 def handle_team_pitching_stats(team_id, year, mode):
-    """Get team pitching statistics - FIXED with correct column names"""
+    """Get team pitching statistics - FIXED with correct column names and franchise mode"""
     try:
         conn = sqlite3.connect(DB_PATH)
+        print(f"handle_team_pitching_stats called with: team_id='{team_id}', year={year}, mode='{mode}'")
         
-        if mode == "season" and year:
+        if mode == "season":
+            # For season mode, use the provided year or default to 2024
+            actual_year = year or 2024
             query = """
             SELECT yearid, teamid, w, l, cg, sho, sv, ipouts, ha, er, hra, bba, soa, era
             FROM lahman_teams 
             WHERE teamid = ? AND yearid = ?
             """
-            df = pd.read_sql_query(query, conn, params=(team_id, year))
+            print(f"Executing SEASON pitching query with params: ({team_id}, {actual_year})")
+            df = pd.read_sql_query(query, conn, params=(team_id, actual_year))
             
-        elif mode == "franchise":
+        elif mode in ["franchise", "career"]:
+            # For franchise/career mode, ignore the year completely
             query = """
-            SELECT teamid, SUM(w) as w, SUM(l) as l, SUM(cg) as cg, SUM(sho) as sho, SUM(sv) as sv,
+            SELECT teamid, 
+                   COUNT(*) as seasons,
+                   SUM(w) as w, SUM(l) as l, SUM(cg) as cg, SUM(sho) as sho, SUM(sv) as sv,
                    SUM(ipouts) as ipouts, SUM(ha) as ha, SUM(er) as er, SUM(hra) as hra, 
-                   SUM(bba) as bba, SUM(soa) as soa, AVG(era) as era
+                   SUM(bba) as bba, SUM(soa) as soa
             FROM lahman_teams 
             WHERE teamid = ?
             GROUP BY teamid
             """
+            print(f"Executing FRANCHISE/CAREER pitching query with params: ({team_id},)")
             df = pd.read_sql_query(query, conn, params=(team_id,))
+            print(f"Franchise/Career pitching query returned {len(df)} rows")
+            if not df.empty:
+                print(f"Pitching franchise data: seasons={df.iloc[0].get('seasons', 'N/A')}, wins={df.iloc[0].get('w', 'N/A')}")
             
         elif mode == "history":
+            # For history mode, ignore the year filter
             query = """
             SELECT yearid, teamid, w, l, cg, sho, sv, ipouts, ha, er, hra, bba, soa, era,
                    rank, divwin, wcwin, lgwin, wswin, attendance
@@ -2124,19 +2154,29 @@ def handle_team_pitching_stats(team_id, year, mode):
             WHERE teamid = ? 
             ORDER BY yearid DESC
             """
+            print(f"Executing HISTORY pitching query with params: ({team_id},)")
             df = pd.read_sql_query(query, conn, params=(team_id,))
+            
         else:
+            # Default to season mode
+            actual_year = year or 2024
             query = """
             SELECT yearid, teamid, w, l, cg, sho, sv, ipouts, ha, er, hra, bba, soa, era
             FROM lahman_teams 
             WHERE teamid = ? AND yearid = ?
             """
-            df = pd.read_sql_query(query, conn, params=(team_id, year or 2024))
+            print(f"Executing DEFAULT pitching query with params: ({team_id}, {actual_year})")
+            df = pd.read_sql_query(query, conn, params=(team_id, actual_year))
         
         conn.close()
+        print(f"Pitching query returned {len(df)} rows")
         
         if df.empty:
-            return jsonify({"error": f"Team '{team_id}' pitching stats not found for year {year}"}), 404
+            if mode in ["franchise", "career"]:
+                return jsonify({"error": f"Team '{team_id}' pitching stats not found in database"}), 404
+            else:
+                actual_year = year or 2024
+                return jsonify({"error": f"Team '{team_id}' pitching stats not found for year {actual_year}"}), 404
         
         # Calculate derived pitching stats
         df = calculate_team_pitching_stats(df)
@@ -2265,11 +2305,15 @@ def format_and_round_stats(stats_dict):
     return formatted_stats
 
 def format_team_response(df, stat_type, mode, team_id, year):
-    """Format team stats response"""
+    """Format team stats response - Updated to handle None year for franchise/career mode"""
     try:
-        team_name = get_team_name(team_id, year)
+        # For franchise/career mode, don't include year in team name
+        if mode in ["franchise", "career"]:
+            team_name = get_team_name(team_id, None)  # Pass None for year
+        else:
+            team_name = get_team_name(team_id, year)
         
-        if mode == "season" or mode == "franchise":
+        if mode in ["season", "franchise", "career"]:
             stats = df.to_dict(orient="records")[0] if not df.empty else {}
         elif mode == "history":
             stats = df.to_dict(orient="records")
@@ -2296,21 +2340,25 @@ def format_team_response(df, stat_type, mode, team_id, year):
                 # Apply formatting to each record in the list
                 stats[i] = format_and_round_stats(record)
         
+        # Get team logo
+        team_logo = get_team_logo_with_fallback(team_id, year)
+        
         return jsonify({
             "mode": mode,
             "team_type": stat_type,
             "team_id": team_id,
             "team_name": team_name,
             "year": year,
+            "team_logo": team_logo,
             "stats": stats
         })
         
     except Exception as e:
         print(f"Error formatting team response: {str(e)}")
         return jsonify({"error": f"Response formatting error: {str(e)}"}), 500
-    
+
 def get_team_name(team_id, year=None):
-    """Get full team name for display purposes"""
+    """Get full team name for display purposes - Updated to handle franchise mode"""
     team_names = {
         # Angels - various eras
         'ALT': 'Los Angeles Angels',      # Early Angels
@@ -2435,162 +2483,164 @@ def get_team_name(team_id, year=None):
     }
     
     base_name = team_names.get(team_id.upper(), team_id)
-    return f"{year} {base_name}" if year else base_name
-
-def get_team_logo_url(team_id, year=None):
-    """Get team logo URL using MLB static image service and historical mappings"""
     
-    # Map your database team codes to MLB's current team abbreviations
+    # For franchise mode or when year is None, don't prefix with year
+    if year is None:
+        return f"{base_name} (All-Time)"
+    else:
+        return f"{year} {base_name}"
+    
+def get_team_logo_url(team_id, year=None):
+    """Get team logo URL using working MLB logo sources"""
+    
+    # Map your database team codes to MLB's team IDs and abbreviations
     mlb_team_mapping = {
         # Angels
-        'ALT': 'LAA',  # Early Angels -> current Angels
-        'CAL': 'LAA',  # California Angels -> current Angels  
-        'ANA': 'LAA',  # Anaheim Angels -> current Angels
-        'LAA': 'LAA',
+        'ALT': {'abbrev': 'LAA', 'id': '108'},
+        'CAL': {'abbrev': 'LAA', 'id': '108'}, 
+        'ANA': {'abbrev': 'LAA', 'id': '108'},
+        'LAA': {'abbrev': 'LAA', 'id': '108'},
         
         # Diamondbacks
-        'ARI': 'ARI',
+        'ARI': {'abbrev': 'ARI', 'id': '109'},
         
         # Braves
-        'BSN': 'ATL',  # Boston Braves -> Atlanta Braves
-        'ML1': 'ATL',  # Milwaukee Braves -> Atlanta Braves
-        'MLA': 'ATL',  # Milwaukee Braves -> Atlanta Braves
-        'ATL': 'ATL',
+        'BSN': {'abbrev': 'ATL', 'id': '144'},
+        'ML1': {'abbrev': 'ATL', 'id': '144'},
+        'MLA': {'abbrev': 'ATL', 'id': '144'},
+        'ATL': {'abbrev': 'ATL', 'id': '144'},
         
         # Orioles
-        'SLA': 'BAL',  # St. Louis Browns -> Baltimore Orioles
-        'BAL': 'BAL',
+        'SLA': {'abbrev': 'BAL', 'id': '110'},
+        'BAL': {'abbrev': 'BAL', 'id': '110'},
         
         # Red Sox
-        'BS1': 'BOS',
-        'BOS': 'BOS',
+        'BS1': {'abbrev': 'BOS', 'id': '111'},
+        'BOS': {'abbrev': 'BOS', 'id': '111'},
         
         # Cubs
-        'CHN': 'CHC',
-        'CHC': 'CHC',
+        'CHN': {'abbrev': 'CHC', 'id': '112'},
+        'CHC': {'abbrev': 'CHC', 'id': '112'},
         
         # White Sox
-        'CHA': 'CWS',
-        'CHW': 'CWS',
-        'CWS': 'CWS',
+        'CHA': {'abbrev': 'CWS', 'id': '145'},
+        'CHW': {'abbrev': 'CWS', 'id': '145'},
+        'CWS': {'abbrev': 'CWS', 'id': '145'},
         
         # Reds
-        'CN2': 'CIN',
-        'CN3': 'CIN',
-        'CIN': 'CIN',
+        'CN2': {'abbrev': 'CIN', 'id': '113'},
+        'CN3': {'abbrev': 'CIN', 'id': '113'},
+        'CIN': {'abbrev': 'CIN', 'id': '113'},
         
-        # Indians/Guardians (year-dependent)
-        'CLE': 'CLE',  # Will handle name change below
+        # Indians/Guardians
+        'CLE': {'abbrev': 'CLE', 'id': '114'},
         
         # Rockies
-        'COL': 'COL',
+        'COL': {'abbrev': 'COL', 'id': '115'},
         
         # Tigers
-        'DET': 'DET',
+        'DET': {'abbrev': 'DET', 'id': '116'},
         
         # Astros
-        'HOU': 'HOU',
+        'HOU': {'abbrev': 'HOU', 'id': '117'},
         
         # Royals
-        'KCA': 'KC',
-        'KCR': 'KC',
+        'KCA': {'abbrev': 'KC', 'id': '118'},
+        'KCR': {'abbrev': 'KC', 'id': '118'},
         
         # Dodgers
-        'BR1': 'LAD',  # Brooklyn -> LA Dodgers
-        'BR2': 'LAD',
-        'BR4': 'LAD',
-        'BRO': 'LAD',
-        'LAD': 'LAD',
-        'LAN': 'LAD',
+        'BR1': {'abbrev': 'LAD', 'id': '119'},
+        'BR2': {'abbrev': 'LAD', 'id': '119'},
+        'BR4': {'abbrev': 'LAD', 'id': '119'},
+        'BRO': {'abbrev': 'LAD', 'id': '119'},
+        'LAD': {'abbrev': 'LAD', 'id': '119'},
+        'LAN': {'abbrev': 'LAD', 'id': '119'},
         
         # Marlins
-        'FLA': 'MIA',  # Florida -> Miami Marlins
-        'MIA': 'MIA',
+        'FLA': {'abbrev': 'MIA', 'id': '146'},
+        'MIA': {'abbrev': 'MIA', 'id': '146'},
         
         # Brewers
-        'MIL': 'MIL',
+        'MIL': {'abbrev': 'MIL', 'id': '158'},
         
         # Twins
-        'MIN': 'MIN',
+        'MIN': {'abbrev': 'MIN', 'id': '142'},
         
         # Mets
-        'NYM': 'NYM',
+        'NYM': {'abbrev': 'NYM', 'id': '121'},
         
         # Yankees
-        'NYY': 'NYY',
+        'NYY': {'abbrev': 'NYY', 'id': '147'},
         
         # Athletics
-        'PHA': 'OAK',  # Philadelphia -> Oakland Athletics
-        'OAK': 'OAK',
+        'PHA': {'abbrev': 'OAK', 'id': '133'},
+        'OAK': {'abbrev': 'OAK', 'id': '133'},
         
         # Phillies
-        'PHN': 'PHI',
-        'PH3': 'PHI',
-        'PHI': 'PHI',
+        'PHN': {'abbrev': 'PHI', 'id': '143'},
+        'PH3': {'abbrev': 'PHI', 'id': '143'},
+        'PHI': {'abbrev': 'PHI', 'id': '143'},
         
         # Pirates
-        'PIT': 'PIT',
+        'PIT': {'abbrev': 'PIT', 'id': '134'},
         
         # Padres
-        'SDP': 'SD',
-        'SD': 'SD',
+        'SDP': {'abbrev': 'SD', 'id': '135'},
+        'SD': {'abbrev': 'SD', 'id': '135'},
         
         # Mariners
-        'SEA': 'SEA',
+        'SEA': {'abbrev': 'SEA', 'id': '136'},
         
         # Giants
-        'NY1': 'SF',   # NY Giants -> SF Giants
-        'SFG': 'SF',
-        'SF': 'SF',
+        'NY1': {'abbrev': 'SF', 'id': '137'},
+        'SFG': {'abbrev': 'SF', 'id': '137'},
+        'SF': {'abbrev': 'SF', 'id': '137'},
         
         # Cardinals
-        'STL': 'STL',
+        'STL': {'abbrev': 'STL', 'id': '138'},
         
         # Rays
-        'TBD': 'TB',   # Devil Rays -> Rays
-        'TBR': 'TB',
-        'TB': 'TB',
+        'TBD': {'abbrev': 'TB', 'id': '139'},
+        'TBR': {'abbrev': 'TB', 'id': '139'},
+        'TB': {'abbrev': 'TB', 'id': '139'},
         
         # Rangers
-        'WAS': 'TEX',  # Washington Senators -> Texas Rangers
-        'TEX': 'TEX',
+        'WAS': {'abbrev': 'TEX', 'id': '140'},
+        'TEX': {'abbrev': 'TEX', 'id': '140'},
         
         # Blue Jays
-        'TOR': 'TOR',
+        'TOR': {'abbrev': 'TOR', 'id': '141'},
         
         # Nationals
-        'MON': 'WSH',  # Montreal Expos -> Washington Nationals
-        'WSN': 'WSH',
-        'WAS': 'WSH'
+        'MON': {'abbrev': 'WSH', 'id': '120'},
+        'WSN': {'abbrev': 'WSH', 'id': '120'},
+        'WAS': {'abbrev': 'WSH', 'id': '120'}
     }
     
-    # Get the modern MLB team code
-    modern_team_code = mlb_team_mapping.get(team_id.upper(), team_id.upper())
+    # Get team info
+    team_info = mlb_team_mapping.get(team_id.upper(), {'abbrev': team_id.upper(), 'id': '0'})
+    abbrev = team_info['abbrev']
+    team_number = team_info['id']
     
-    # Handle special year-based cases
-    if year:
-        # Cleveland name change in 2022
-        if team_id.upper() == 'CLE':
-            if year >= 2022:
-                team_name = 'guardians'
-            else:
-                team_name = 'indians'
-            # MLB might have different logos for historical vs current
-            return f"https://www.mlbstatic.com/team-logos/{modern_team_code.lower()}.svg"
-        
-        # Marlins name change
-        if team_id.upper() in ['FLA', 'MIA']:
-            if year < 2012:
-                # Might want to use a historical Florida Marlins logo
-                pass
-            # Fall through to use current logo
-    
-    # Primary logo URL patterns to try
+    # Try multiple URL patterns that are known to work
     logo_urls = [
-        f"https://www.mlbstatic.com/team-logos/{modern_team_code.lower()}.svg",
-        f"https://img.mlbstatic.com/mlb-photos/image/upload/v1/team/{modern_team_code.lower()}/logo/current",
-        f"https://www.mlbstatic.com/team-logos/team-cap-on-light/{modern_team_code.lower()}.svg",
-        f"https://securea.mlb.com/mlb/images/team_logos/logo_{modern_team_code.lower()}_79x76.gif"
+        # MLB official team logos - using team ID
+        f"https://www.mlbstatic.com/team-logos/url/{team_number}.svg",
+        
+        # Alternative MLB static URLs
+        f"https://img.mlbstatic.com/mlb-photos/image/upload/v1/team/{abbrev.lower()}/logo/current",
+        
+        # ESPN logos (reliable fallback)
+        f"https://a.espncdn.com/i/teamlogos/mlb/500/{abbrev.lower()}.png",
+        
+        # Sports logos database 
+        f"https://content.sportslogos.net/logos/54/{team_number}/{abbrev}-logo-primary-dark.png",
+        
+        # Loodibee logos (free transparent PNGs)
+        f"https://loodibee.com/wp-content/uploads/mlb-{abbrev.lower()}-logo-transparent.png",
+        
+        # TeamColorCodes fallback
+        f"https://teamcolorcodes.com/wp-content/uploads/{abbrev.lower()}-logo.png"
     ]
     
     return logo_urls[0]  # Return primary URL
@@ -2599,14 +2649,56 @@ def get_team_logo_url(team_id, year=None):
 def get_team_logo_with_fallback(team_id, year=None):
     """Get team logo with multiple fallback options"""
     try:
-        # Primary: MLB Static
-        primary_url = get_team_logo_url(team_id, year)
+        # Map team codes
+        mlb_team_mapping = {
+            'CHN': {'abbrev': 'CHC', 'id': '112'},
+            'CHC': {'abbrev': 'CHC', 'id': '112'},
+            'LAN': {'abbrev': 'LAD', 'id': '119'},
+            'LAD': {'abbrev': 'LAD', 'id': '119'},
+            'CHA': {'abbrev': 'CWS', 'id': '145'},
+            'CWS': {'abbrev': 'CWS', 'id': '145'},
+            'NYY': {'abbrev': 'NYY', 'id': '147'},
+            'BOS': {'abbrev': 'BOS', 'id': '111'},
+            'ATL': {'abbrev': 'ATL', 'id': '144'},
+            'HOU': {'abbrev': 'HOU', 'id': '117'},
+            'LAA': {'abbrev': 'LAA', 'id': '108'},
+            'ARI': {'abbrev': 'ARI', 'id': '109'},
+            'BAL': {'abbrev': 'BAL', 'id': '110'},
+            'CIN': {'abbrev': 'CIN', 'id': '113'},
+            'CLE': {'abbrev': 'CLE', 'id': '114'},
+            'COL': {'abbrev': 'COL', 'id': '115'},
+            'DET': {'abbrev': 'DET', 'id': '116'},
+            'KCR': {'abbrev': 'KC', 'id': '118'},
+            'MIA': {'abbrev': 'MIA', 'id': '146'},
+            'MIL': {'abbrev': 'MIL', 'id': '158'},
+            'MIN': {'abbrev': 'MIN', 'id': '142'},
+            'NYM': {'abbrev': 'NYM', 'id': '121'},
+            'OAK': {'abbrev': 'OAK', 'id': '133'},
+            'PHI': {'abbrev': 'PHI', 'id': '143'},
+            'PIT': {'abbrev': 'PIT', 'id': '134'},
+            'SDP': {'abbrev': 'SD', 'id': '135'},
+            'SEA': {'abbrev': 'SEA', 'id': '136'},
+            'SFG': {'abbrev': 'SF', 'id': '137'},
+            'STL': {'abbrev': 'STL', 'id': '138'},
+            'TBR': {'abbrev': 'TB', 'id': '139'},
+            'TEX': {'abbrev': 'TEX', 'id': '140'},
+            'TOR': {'abbrev': 'TOR', 'id': '141'},
+            'WSN': {'abbrev': 'WSH', 'id': '120'}
+        }
         
-        # Fallback options
-        modern_team = get_modern_team_code(team_id)
+        team_info = mlb_team_mapping.get(team_id.upper(), {'abbrev': team_id.upper(), 'id': '0'})
+        abbrev = team_info['abbrev']
+        team_number = team_info['id']
         
+        # Primary URL (most reliable)
+        primary_url = f"https://a.espncdn.com/i/teamlogos/mlb/500/{abbrev.lower()}.png"
+        
+        # Fallback URLs in order of reliability
         fallback_urls = [
-            f"https://logos.fansided.com/team/{modern_team.lower()}-logo-primary.png",
+            f"https://www.mlbstatic.com/team-logos/url/{team_number}.svg",
+            f"https://loodibee.com/wp-content/uploads/mlb-{abbrev.lower()}-logo-transparent.png",
+            f"https://content.sportslogos.net/logos/54/{team_number}/{abbrev}-logo-primary-dark.png",
+            f"https://img.mlbstatic.com/mlb-photos/image/upload/v1/team/{abbrev.lower()}/logo/current"
         ]
         
         return {
@@ -2616,7 +2708,12 @@ def get_team_logo_with_fallback(team_id, year=None):
         
     except Exception as e:
         print(f"Error getting team logo: {e}")
-        return None
+        # Return a basic fallback
+        return {
+            'primary': f"https://a.espncdn.com/i/teamlogos/mlb/500/{team_id.lower()}.png",
+            'fallbacks': []
+        }
+
 
 
 def get_modern_team_code(team_id):
@@ -2688,55 +2785,7 @@ def get_historical_team_logo(team_id, year):
     return get_team_logo_url(team_id, year)
 
 
-# Integration with your existing code
-def format_team_response(df, stat_type, mode, team_id, year):
-    """Enhanced format_team_response with team logo - UPDATE YOUR EXISTING FUNCTION"""
-    try:
-        team_name = get_team_name(team_id, year)
-        
-        # Get team logo
-        team_logo = get_team_logo_with_fallback(team_id, year)
-        
-        if mode == "season" or mode == "franchise":
-            stats = df.to_dict(orient="records")[0] if not df.empty else {}
-        elif mode == "history":
-            stats = df.to_dict(orient="records")
-        else:
-            stats = df.to_dict(orient="records")[0] if not df.empty else {}
-        
-        # Convert numpy types to Python types for JSON serialization
-        if isinstance(stats, dict):
-            for key, value in stats.items():
-                if hasattr(value, 'item'):  # numpy scalar
-                    stats[key] = value.item()
-                elif pd.isna(value):
-                    stats[key] = None
-            # Apply formatting to the stats dictionary
-            stats = format_and_round_stats(stats)
-            
-        elif isinstance(stats, list):
-            for i, record in enumerate(stats):
-                for key, value in record.items():
-                    if hasattr(value, 'item'):
-                        record[key] = value.item()
-                    elif pd.isna(value):
-                        record[key] = None
-                # Apply formatting to each record in the list
-                stats[i] = format_and_round_stats(record)
-        
-        return jsonify({
-            "mode": mode,
-            "team_type": stat_type,
-            "team_id": team_id,
-            "team_name": team_name,
-            "year": year,
-            "team_logo": team_logo,  # Add logo URLs
-            "stats": stats
-        })
-        
-    except Exception as e:
-        print(f"Error formatting team response: {str(e)}")
-        return jsonify({"error": f"Response formatting error: {str(e)}"}), 500
+
 
 if __name__ == "__main__":
     app.run(debug=True)

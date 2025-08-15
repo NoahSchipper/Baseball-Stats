@@ -1490,26 +1490,30 @@ async function compareTeams() {
     const tbody = document.getElementById("teamComparisonBody");
     tbody.innerHTML = `<tr><td colspan='3' style='text-align: center; padding: 20px;'>Loading team data...</td></tr>`;
     
-    // Clear existing logos
-    const logoA = document.getElementById("teamLogoA");
-    const logoB = document.getElementById("teamLogoB");
-    if (logoA) logoA.style.display = 'none';
-    if (logoB) logoB.style.display = 'none';
-
     const [resA, resB] = await Promise.all([
         fetchTeamStats(teamA, mode, statType),
         fetchTeamStats(teamB, mode, statType)
     ]);
-    
+
     updateTeamComparisonTable(resA, resB, teamA, teamB, statType);
 
+    // Clear existing logos
+    const logoA = document.getElementById("teamLogoA");
+    const logoB = document.getElementById("teamLogoB");
+   // if (logoA) logoA.style.display = 'none';
+   // if (logoB) logoB.style.display = 'none';
+    
     // Load team logos
     if (resA?.team_logo && logoA) {
         loadTeamLogo(resA.team_logo, logoA, resA.team_name);
+    } else {
+      console.log("Logo A not loaded - resA.team_logo:", resA?.team_logo, "logoA element:", logoA);
     }
     
     if (resB?.team_logo && logoB) {
         loadTeamLogo(resB.team_logo, logoB, resB.team_name);
+    } else {
+      console.log("Logo B not loaded - resB.team_logo:", resB?.team_logo, "logoB element:", logoB);
     }
 }
 

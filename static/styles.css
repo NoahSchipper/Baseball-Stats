@@ -510,6 +510,29 @@ td.better-stat {
   z-index: 100;
 }
 
+
+#teamAName, #teamBName {
+  text-align: center;
+}
+
+#teamAName img, #teamBName img {
+  display: block;
+  margin: 0 auto 10px auto;
+  border-radius: 6px;
+  box-shadow: 0 0 8px #aaa;
+  height: 400px;
+  width: 300px;
+  object-fit: contain; /* This ensures logos don't get distorted */
+  background: white; /* White background for logos that need it */
+  padding: 10px; /* Some padding around the logo */
+}
+
+.team-name {
+  font-weight: 600;
+  font-size: 1.1rem;
+  text-align: center;
+}
+
 /* Responsive Design */
 @media (max-width: 768px) {
   .input-row {
