@@ -56,7 +56,7 @@ def get_photo_url_for_player(playerid, conn):
         db_first, db_last, debut, final_game, birth_year = name_result
         print(f"Getting photo for playerid: {playerid}, Database name: {db_first} {db_last}, Debut: {debut}")
         
-        # Special handling for known father/son Sr/Jr cases with direct MLB ID mappings
+        # Special handling for known tricky cases with direct MLB ID mappings
         direct_mlb_mappings = {
             # Format: playerid -> (search_name, mlb_id)
             'griffke01': ('Ken Griffey', None),         # Sr. - let lookup handle it
@@ -71,6 +71,7 @@ def get_photo_url_for_player(playerid, conn):
             'alomasa02': ('Sandy Alomar Jr.', None),    # Jr.
             'rosepe01': ('Pete Rose', None),            # Sr. - let lookup handle it
             'rosepe02': ('Pete Rose Jr.', 121453),      # Jr. with direct MLB ID
+            'baezja01': ('Javier Baez', 595879)      # Direct MLB ID for Baez
         }
         
         # Check if we have a direct mapping for this player
@@ -159,7 +160,6 @@ def get_world_series_championships(playerid, conn):
     try:
         cursor = conn.cursor()
         
-        print(f"DEBUG: Looking for WS championships for playerid: '{playerid}'")
         
         # Method 1: Check if player's team won World Series in years they played
         ws_query = """
@@ -180,11 +180,8 @@ def get_world_series_championships(playerid, conn):
         ORDER BY 1 DESC
         """
         
-        print(f"DEBUG: Executing WS query for playerid: '{playerid}'")
         cursor.execute(ws_query, (playerid, playerid))
         ws_results = cursor.fetchall()
-        
-        print(f"DEBUG: Raw WS query results: {ws_results}")
         
         championships = []
         for row in ws_results:
@@ -195,8 +192,7 @@ def get_world_series_championships(playerid, conn):
                 'team_name': team_name or team_id
             })
         
-        print(f"DEBUG: Final championships list: {championships}")
-        print(f"Found {len(championships)} World Series championships for {playerid}")
+       
         
         return championships
         
@@ -310,7 +306,7 @@ def get_player_awards(playerid, conn):
         print(f"Getting awards for playerid: {playerid}")
         cursor = conn.cursor()
         
-        print(f"DEBUG: Raw playerid from route: '{playerid}'", repr(playerid))
+        # print(f"DEBUG: Raw playerid from route: '{playerid}'", repr(playerid))
 
         # Query for all awards
         awards_query = """
@@ -810,9 +806,9 @@ def get_player_with_disambiguation():
 @app.route('/popular-players')
 def popular_players():
     fallback_players = [
-        "Mike Trout", "Aaron Judge", "Mookie Betts", "Ronald Acuna Jr.",
+        "Mike Trout", "Aaron Judge", "Mookie Betts", "Ronald Acuña",
         "Juan Soto", "Vladimir Guerrero Jr.", "Fernando Tatis Jr.", 
-        "Gerrit Cole", "Jacob deGrom", "Shane Bieber", "Spencer Strider",
+        "Gerrit Cole", "Jacob deGrom", "Tarik Skubal", "Spencer Strider",
         "Freddie Freeman", "Manny Machado", "Jose Altuve", "Kyle Tucker"
     ]
     return jsonify(fallback_players)
@@ -1564,15 +1560,334 @@ def find_live_player_match(df_live, first, last):
     
     return pd.DataFrame()
 
+# Team Stats Mode - Fixed with correct lahman_teams table name
+@app.route("/team")
+def get_team_stats():
+    try:
+        team = request.args.get("team", "").strip()
+        mode = request.args.get("mode", "season").lower()
+        stat_type = request.args.get("stat_type", "batting").lower()
+        
+        print(f"Team endpoint called with: team='{team}', mode='{mode}', stat_type='{stat_type}'")
+        
+        if not team:
+            return jsonify({"error": "Enter team"}), 400
+        
+        team_id, year = parse_team_input(team)
+        print(f"Parsed: team_id='{team_id}', year={year}")
+        
+        if stat_type == "batting":
+            return handle_team_batting_stats(team_id, year, mode)
+        elif stat_type == "pitching":
+            return handle_team_pitching_stats(team_id, year, mode)
+        else:
+            return jsonify({"error": "Invalid stat type"}), 400
+            
+    except Exception as e:
+        print(f"Error in get_team_stats: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": f"Internal server error: {str(e)}"}), 500
+
+def parse_team_input(team):
+    """Parse team input like '2023 HOU', 'HOU 2023', or 'HOU'"""
+    try:
+        parts = team.strip().split()
+        
+        if len(parts) == 1:
+            # Just team code - use most recent season (default to 2023)
+            return parts[0].upper(), 2023
+        elif len(parts) == 2:
+            # Year and team code
+            if parts[0].isdigit():
+                return parts[1].upper(), int(parts[0])
+            elif parts[1].isdigit():
+                return parts[0].upper(), int(parts[1])
+        
+        return team.upper(), 2023
+    except Exception as e:
+        print(f"Error parsing team input '{team}': {str(e)}")
+        return team.upper(), 2023
+
+def handle_team_batting_stats(team_id, year, mode):
+    """Get team batting statistics"""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        print(f"Connected to database: {DB_PATH}")
+        
+        if mode == "season" and year:
+            # Single season stats - Using lahman_teams table
+            query = """
+            SELECT yearid, teamid, g, ab, r, h, "2b", "3b", hr, sb, cs, bb, so, hbp, sf
+            FROM lahman_teams 
+            WHERE teamid = ? AND yearid = ?
+            """
+            print(f"Executing query: {query} with params: ({team_id}, {year})")
+            df = pd.read_sql_query(query, conn, params=(team_id, year))
+            
+        elif mode == "franchise":
+            # All-time franchise stats
+            query = """
+            SELECT teamid, SUM(G) as G, SUM(AB) as AB, SUM(R) as R, SUM(H) as H, 
+                   SUM("2B") as "2B", SUM("3B") as "3B", SUM(HR) as HR, SUM(RBI) as RBI,
+                   SUM(SB) as SB, SUM(CS) as CS, SUM(BB) as BB, SUM(SO) as SO,
+                   SUM(IBB) as IBB, SUM(HBP) as HBP, SUM(SH) as SH, SUM(SF) as SF, SUM(GIDP) as GIDP
+            FROM lahman_teams 
+            WHERE teamid = ?
+            GROUP BY teamid
+            """
+            df = pd.read_sql_query(query, conn, params=(team_id,))
+            
+        elif mode == "history":
+            # Season-by-season history
+            query = """
+            SELECT yearid, teamid, G, AB, R, H, "2B", "3B", HR, RBI, SB, CS, BB, SO, IBB, HBP, SH, SF, GIDP,
+                   W, L, Rank, DivWin, WCWin, LgWin, WSWin, attendance
+            FROM lahman_teams 
+            WHERE teamid = ?
+            ORDER BY yearid DESC
+            """
+            df = pd.read_sql_query(query, conn, params=(team_id,))
+        else:
+            # Default to season mode
+            query = """
+            SELECT yearid, teamid, G, AB, R, H, "2B", "3B", HR, RBI, SB, CS, BB, SO, IBB, HBP, SH, SF, GIDP
+            FROM lahman_teams 
+            WHERE teamid = ? AND yearid = ?
+            """
+            df = pd.read_sql_query(query, conn, params=(team_id, year or 2023))
+            
+        conn.close()
+        print(f"Query returned {len(df)} rows")
+        
+        if df.empty:
+            return jsonify({"error": f"Team '{team_id}' not found for year {year}"}), 404
+        
+        # Calculate derived stats
+        df = calculate_team_batting_stats(df)
+        
+        return format_team_response(df, "batting", mode, team_id, year)
+        
+    except Exception as e:
+        print(f"Error in handle_team_batting_stats: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": f"Database error: {str(e)}"}), 500
+
+def calculate_team_batting_stats(df):
+    """Calculate batting averages, OBP, SLG, etc."""
+    try:
+        # Handle missing columns with defaults
+        required_cols = ['AB', 'H', 'BB', 'HBP', 'SF', '2B', '3B', 'HR']
+        for col in required_cols:
+            if col not in df.columns:
+                df[col] = 0
+        
+        # Fill NaN values with 0
+        df = df.fillna(0)
+        
+        # Calculate batting average
+        df["BA"] = df.apply(lambda row: row["H"] / row["AB"] if row["AB"] > 0 else 0, axis=1)
+        
+        # Calculate on-base percentage
+        df["OBP"] = df.apply(lambda row: 
+            (row["H"] + row["BB"] + row["HBP"]) / 
+            (row["AB"] + row["BB"] + row["HBP"] + row["SF"]) 
+            if (row["AB"] + row["BB"] + row["HBP"] + row["SF"]) > 0 else 0, axis=1)
+        
+        # Calculate singles and total bases
+        df["singles"] = df["H"] - df["2B"] - df["3B"] - df["HR"]
+        df["total_bases"] = df["singles"] + 2*df["2B"] + 3*df["3B"] + 4*df["HR"]
+        
+        # Calculate slugging percentage
+        df["SLG"] = df.apply(lambda row: row["total_bases"] / row["AB"] if row["AB"] > 0 else 0, axis=1)
+        
+        # Calculate OPS
+        df["OPS"] = df["OBP"] + df["SLG"]
+        
+        return df
+        
+    except Exception as e:
+        print(f"Error calculating batting stats: {str(e)}")
+        return df
+
+def handle_team_pitching_stats(team_id, year, mode):
+    """Get team pitching statistics"""
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        
+        if mode == "season" and year:
+            query = """
+            SELECT yearid, teamid, W, L, CG, SHO, SV, IPouts, H, ER, HR, BB, SO, BAOpp, ERA, IBB, WP, HBP, BK, BFP, GF, R, SH, SF, GIDP
+            FROM lahman_teams 
+            WHERE teamid = ? AND yearid = ?
+            """
+            df = pd.read_sql_query(query, conn, params=(team_id, year))
+            
+        elif mode == "franchise":
+            query = """
+            SELECT teamid, SUM(W) as W, SUM(L) as L, SUM(CG) as CG, SUM(SHO) as SHO, SUM(SV) as SV,
+                   SUM(IPouts) as IPouts, SUM(H) as H, SUM(ER) as ER, SUM(HR) as HR, SUM(BB) as BB, SUM(SO) as SO,
+                   AVG(BAOpp) as BAOpp, AVG(ERA) as ERA, SUM(IBB) as IBB, SUM(WP) as WP, SUM(HBP) as HBP, 
+                   SUM(BK) as BK, SUM(BFP) as BFP, SUM(GF) as GF, SUM(R) as R, SUM(SH) as SH, SUM(SF) as SF, SUM(GIDP) as GIDP
+            FROM lahman_teams 
+            WHERE teamid = ?
+            GROUP BY teamid
+            """
+            df = pd.read_sql_query(query, conn, params=(team_id,))
+            
+        elif mode == "history":
+            query = """
+            SELECT yearid, teamid, W, L, CG, SHO, SV, IPouts, H, ER, HR, BB, SO, BAOpp, ERA, IBB, WP, HBP, BK, BFP, GF, R, SH, SF, GIDP,
+                   Rank, DivWin, WCWin, LgWin, WSWin, attendance
+            FROM lahman_teams 
+            WHERE teamid = ? 
+            ORDER BY yearid DESC
+            """
+            df = pd.read_sql_query(query, conn, params=(team_id,))
+        else:
+            # Default to season mode
+            query = """
+            SELECT yearid, teamid, W, L, CG, SHO, SV, IPouts, H, ER, HR, BB, SO, BAOpp, ERA, IBB, WP, HBP, BK, BFP, GF, R, SH, SF, GIDP
+            FROM lahman_teams 
+            WHERE teamid = ? AND yearid = ?
+            """
+            df = pd.read_sql_query(query, conn, params=(team_id, year or 2023))
+        
+        conn.close()
+        
+        if df.empty:
+            return jsonify({"error": f"Team '{team_id}' pitching stats not found for year {year}"}), 404
+        
+        # Calculate derived pitching stats
+        df = calculate_team_pitching_stats(df)
+        
+        return format_team_response(df, "pitching", mode, team_id, year)
+        
+    except Exception as e:
+        print(f"Error in handle_team_pitching_stats: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": f"Pitching stats error: {str(e)}"}), 500
+
+def calculate_team_pitching_stats(df):
+    """Calculate team pitching derived stats"""
+    try:
+        # Handle missing columns
+        required_cols = ['IPouts', 'ER', 'H', 'BB', 'SO']
+        for col in required_cols:
+            if col not in df.columns:
+                df[col] = 0
+                
+        # Fill NaN values
+        df = df.fillna(0)
+        
+        # Calculate innings pitched
+        df["IP"] = df["IPouts"] / 3.0
+        
+        # Calculate ERA (if not already present or recalculate)
+        df["ERA_calc"] = df.apply(lambda row: (row["ER"] * 9) / (row["IPouts"] / 3.0) if row["IPouts"] > 0 else 0, axis=1)
+        
+        # Calculate WHIP
+        df["WHIP"] = df.apply(lambda row: (row["H"] + row["BB"]) / (row["IPouts"] / 3.0) if row["IPouts"] > 0 else 0, axis=1)
+        
+        # Calculate K/9 and BB/9
+        df["K9"] = df.apply(lambda row: (row["SO"] * 9) / (row["IPouts"] / 3.0) if row["IPouts"] > 0 else 0, axis=1)
+        df["BB9"] = df.apply(lambda row: (row["BB"] * 9) / (row["IPouts"] / 3.0) if row["IPouts"] > 0 else 0, axis=1)
+        
+        return df
+        
+    except Exception as e:
+        print(f"Error calculating pitching stats: {str(e)}")
+        return df
+
+def format_team_response(df, stat_type, mode, team_id, year):
+    """Format team stats response"""
+    try:
+        team_name = get_team_name(team_id, year)
+        
+        if mode == "season" or mode == "franchise":
+            stats = df.to_dict(orient="records")[0] if not df.empty else {}
+        elif mode == "history":
+            stats = df.to_dict(orient="records")
+        else:
+            stats = df.to_dict(orient="records")[0] if not df.empty else {}
+        
+        # Convert numpy types to Python types for JSON serialization
+        if isinstance(stats, dict):
+            for key, value in stats.items():
+                if hasattr(value, 'item'):  # numpy scalar
+                    stats[key] = value.item()
+                elif pd.isna(value):
+                    stats[key] = None
+        elif isinstance(stats, list):
+            for record in stats:
+                for key, value in record.items():
+                    if hasattr(value, 'item'):
+                        record[key] = value.item()
+                    elif pd.isna(value):
+                        record[key] = None
+        
+        return jsonify({
+            "mode": mode,
+            "team_type": stat_type,
+            "team_id": team_id,
+            "team_name": team_name,
+            "year": year,
+            "stats": stats
+        })
+        
+    except Exception as e:
+        print(f"Error formatting team response: {str(e)}")
+        return jsonify({"error": f"Response formatting error: {str(e)}"}), 500
+
+def get_team_name(team_id, year=None):
+    """Get full team name"""
+    team_names = {
+        'ANA': 'Los Angeles Angels',
+        'LAA': 'Los Angeles Angels',
+        'ARI': 'Arizona Diamondbacks', 
+        'ATL': 'Atlanta Braves',
+        'BAL': 'Baltimore Orioles',
+        'BOS': 'Boston Red Sox',
+        'CHC': 'Chicago Cubs',
+        'CHW': 'Chicago White Sox',
+        'CWS': 'Chicago White Sox',
+        'CIN': 'Cincinnati Reds',
+        'CLE': 'Cleveland Guardians',
+        'COL': 'Colorado Rockies',
+        'DET': 'Detroit Tigers',
+        'HOU': 'Houston Astros',
+        'KCA': 'Kansas City Royals',
+        'KCR': 'Kansas City Royals',
+        'LAD': 'Los Angeles Dodgers',
+        'LAN': 'Los Angeles Dodgers',
+        'MIA': 'Miami Marlins',
+        'FLA': 'Miami Marlins',
+        'MIL': 'Milwaukee Brewers',
+        'MIN': 'Minnesota Twins',
+        'NYM': 'New York Mets',
+        'NYY': 'New York Yankees',
+        'OAK': 'Oakland Athletics',
+        'PHI': 'Philadelphia Phillies',
+        'PIT': 'Pittsburgh Pirates',
+        'SDP': 'San Diego Padres',
+        'SD': 'San Diego Padres',
+        'SEA': 'Seattle Mariners',
+        'SFG': 'San Francisco Giants',
+        'SF': 'San Francisco Giants',
+        'STL': 'St. Louis Cardinals',
+        'TBD': 'Tampa Bay Rays',
+        'TBR': 'Tampa Bay Rays',
+        'TB': 'Tampa Bay Rays',
+        'TEX': 'Texas Rangers',
+        'TOR': 'Toronto Blue Jays',
+        'WSN': 'Washington Nationals',
+        'WAS': 'Washington Nationals'
+    }
+    
+    base_name = team_names.get(team_id.upper(), team_id)
+    return f"{year} {base_name}" if year else base_name
+
 if __name__ == "__main__":
-    # Test code
-    import sqlite3
-    conn = sqlite3.connect(DB_PATH)
-    
-    print("Testing Kyle Tucker:")
-    result = get_world_series_championships('tuckeky01', conn)
-    print(f"Result: {result}")
-    
-    conn.close()
-    
     app.run(debug=True)

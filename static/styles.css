@@ -1,23 +1,91 @@
 body {
   font-family: Arial, sans-serif;
+  max-width: 1500px;
+  margin: 0 auto;
   padding: 20px;
-  margin: 0;
+  background-color: #f8f9fa;
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
   align-items: center;
-  min-height: 100vh;
 }
 
-*{
+* {
   cursor: default;
 }
 
+.container {
+  background: white;
+  border-radius: 8px;
+  padding: 20px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+  width: 100%;
+  max-width: 1500px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* Mode Selection Tabs */
+.mode-tabs {
+  display: flex;
+  margin-bottom: 20px;
+  border-bottom: 2px solid #e9ecef;
+  width: 100%;
+  justify-content: center;
+}
+
+.mode-tab {
+  padding: 10px 20px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  border-bottom: 3px solid transparent;
+  transition: all 0.3s ease;
+  color: black;
+}
+
+.mode-tab.active {
+  border-bottom-color: black;
+  color: black;
+  font-weight: bold;
+}
+
+.mode-tab:hover {
+  background-color: #f8f9fa;
+}
+
+/* Comparison Sections */
+.comparison-section {
+  display: none;
+  width: 100%;
+  color: black;
+}
+
+.comparison-section.active {
+  display: block;
+  
+}
+
+
+
+/* Input Row Styling */
 .input-row {
   display: flex;
   gap: 15px;
   flex-wrap: wrap;
   justify-content: center;
   margin-bottom: 20px;
+  /* align-items: flex-end; */
+}
+
+/* Input Container with Dropdown */
+.input-container {
+  position: relative;
+  display: inline-block;
+  /*flex: 1;
+  min-width: 200px; */
 }
 
 input[type="text"], select {
@@ -26,179 +94,38 @@ input[type="text"], select {
   min-width: 150px;
 }
 
-button {
-  padding: 6px 14px;
-  font-size: 1rem;
-  cursor: pointer;
-}
-
-.container {
+/* .input-container input {
   width: 100%;
-  max-width: 1000px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
+  padding: 8px 12px;
+  border: 2px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+  box-sizing: border-box;
+  min-width: 150px;
 }
 
-/* Remove the separate photo container since we'll put photos in table headers */
-.player-photos {
-  display: none;
+.input-container input:focus {
+  border-color: black;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
 }
+*/
 
-.logo-cell {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  max-width: 100%;
-  padding: 4px;
-  overflow: hidden;
-}
-
-#logo {
-  max-width: 300px;
-  height: 300px;
-  display: block;
-  object-fit: contain;
-}
-
-
-#comparisonTable {
-  border-collapse: collapse;
-  width: 100%;
-  max-width: 1000px;
-  table-layout: fixed;
-}
-
-
-
-table {
-  border-collapse: collapse;
-  width: 100%;
-}
-
-th, td {
-  border: 1px solid #ccc;
-  padding: 10px 12px;
-  text-align: center;
-}
-
-th {
-  background-color: #f0f0f0;
-  font-weight: bold;
-  vertical-align: middle;
-  padding: 15px 10px;
-}
-
- .body .td {
-  font-weight: bold;
-}
-.stat-header {
-  background-color: #e0e0e0;
-  font-size: 1.1rem;
-  padding: 10px;
-  text-align: center;
-  font-weight: bold;
-}
-
-/* Style for player header cells that will contain photos */
-#playerAName,
-#playerBName {
-  text-align: center;
-}
-
-#playerAName img,
-#playerBName img {
-  display: block;
-  margin: 0 auto 10px auto;
-  border-radius: 6px;
-  box-shadow: 0 0 8px #aaa;
-  max-height: 300px;
-  max-width: 300px;
-}
-
-.player-name {
-  font-weight: 600;
-  font-size: 1.1rem;
-}
-
-td {
-  font-family: monospace;
-  font-size: 1rem;
-  white-space: nowrap;
-}
-
-/* Enhanced suggestion styling with disambiguation */
-.suggestion-item {
-    padding: 12px 16px;
-    border-bottom: 1px solid #eee;
-    cursor: pointer;
-    transition: background-color 0.2s ease;
-}
-
-.suggestion-item:hover {
-    background-color: #f8f9fa;
-}
-
-.suggestion-item:last-child {
-    border-bottom: none;
-}
-
-.player-name {
-    font-weight: 500;
-    font-size: 14px;
-    color: #333;
-    margin-bottom: 2px;
-}
-
-.disambiguation-note {
-    font-size: 12px;
-    color: #666;
-    font-style: italic;
-}
-
-.suggestion-item.error {
-    color: #dc3545;
-    cursor: default;
-}
-
-.suggestion-item.error:hover {
-    background-color: transparent;
-}
-
-/* Modal styles for disambiguation */
-.modal {
-    display: none;
-    position: fixed;
-    z-index: 1000;
-    left: 0;
-    top: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.5);
-    animation: fadeIn 0.3s ease;
-}
-
-/* Add these styles to your existing styles.css */
-
-.input-container {
-  position: relative;
-  display: inline-block;
-}
-
+/* Dropdown Styling */
 .dropdown {
   position: absolute;
   top: 100%;
   left: 0;
   right: 0;
   background: white;
-  border: 1px solid #ccc;
+  border: 1px solid #ddd;
   border-top: none;
   border-radius: 0 0 4px 4px;
-  max-height: 200px;
+  max-height: 300px;
   overflow-y: auto;
   z-index: 1000;
   display: none;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
 }
 
 .dropdown.show {
@@ -206,7 +133,7 @@ td {
 }
 
 .dropdown-item {
-  padding: 8px 12px;
+  padding: 10px 12px;
   cursor: pointer;
   border-bottom: 1px solid #f0f0f0;
   transition: background-color 0.2s;
@@ -223,225 +150,426 @@ td {
 }
 
 .dropdown-item .player-years {
-  color: #666;
   font-size: 12px;
+  color: #666;
   margin-left: 8px;
 }
 
-@keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
+/* Form Controls */
+input[type="text"], select {
+  padding: 8px 12px;
+  font-size: 14px;
+  border: 2px solid #ddd;
+  border-radius: 4px;
+  min-width: 200px;
 }
 
-.modal-content {
-    background-color: #fff;
-    margin: 15% auto;
-    padding: 24px;
-    border-radius: 8px;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-    width: 90%;
-    max-width: 500px;
-    animation: slideIn 0.3s ease;
+select:focus {
+  border-color: black;
+  outline: none;
 }
 
-@keyframes slideIn {
-    from { 
-        transform: translateY(-50px);
-        opacity: 0;
-    }
-    to { 
-        transform: translateY(0);
-        opacity: 1;
-    }
+button {
+  background-color: #007bff;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: bold;
+  transition: background-color 0.3s ease;
 }
 
-.modal-content h3 {
-    margin-top: 0;
-    margin-bottom: 16px;
-    color: #333;
-    font-size: 20px;
+button:hover {
+  background-color: #0056b3;
 }
 
-.modal-content p {
-    margin-bottom: 20px;
-    color: #666;
-    line-height: 1.5;
+/* Labels */
+label {
+  font-weight: bold;
+  display: block;
+  margin-bottom: 5px;
 }
 
-.player-options {
-    margin-bottom: 24px;
+/* Table Styling */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 20px;
+  background: white;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  border-radius: 8px;
+  overflow: hidden;
+  max-width: 1500px;
+  table-layout: fixed;
 }
 
-.player-option {
-    padding: 16px;
-    border: 2px solid #e9ecef;
-    border-radius: 6px;
-    margin-bottom: 12px;
-    cursor: pointer;
-    transition: all 0.2s ease;
+th, td {
+  text-align: center;
+  padding: 12px 8px;
+  border-bottom: 1px solid #e9ecef;
+  border: 1px solid #ccc;
 }
 
-.player-option:hover {
-    border-color: #007bff;
-    background-color: #f8f9ff;
+th {
+  background-color: #f8f9fa;
+  font-weight: bold;
+  color: #495057;
+  vertical-align: middle;
+  padding: 15px 10px;
 }
 
-.player-option:last-child {
-    margin-bottom: 0;
+td {
+  font-family: monospace;
+  font-size: 1rem;
+  white-space: nowrap;
 }
 
-.player-details strong {
-    display: block;
-    font-size: 16px;
-    color: #333;
-    margin-bottom: 4px;
+.stat-header {
+  background-color: #e0e0e0;
+  font-size: 1.1rem;
+  padding: 10px;
+  text-align: center;
+  font-weight: bold;
+  color: black;
 }
 
-.player-meta {
-    font-size: 13px;
-    color: #666;
+/* Player Header Styling */
+#playerAName, #playerBName, #teamAName, #teamBName {
+  text-align: center;
 }
 
-.modal-close {
-    background-color: #6c757d;
-    color: white;
-    border: none;
-    padding: 10px 20px;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 14px;
-    transition: background-color 0.2s ease;
+#playerAName img, #playerBName img {
+  display: block;
+  margin: 0 auto 10px auto;
+  border-radius: 6px;
+  box-shadow: 0 0 8px #aaa;
+  height: 400px;
+  width: 300px;
 }
 
-.modal-close:hover {
-    background-color: #5a6268;
+.player-name {
+  font-weight: 600;
+  font-size: 1.1rem;
 }
 
-/* Enhanced search input styling */
-#player-search {
-    position: relative;
-    padding: 12px 16px;
-    font-size: 16px;
-    border: 2px solid #ddd;
-    border-radius: 6px;
-    width: 100%;
-    max-width: 400px;
-    transition: border-color 0.2s ease;
+/* Logo Cell */
+.logo-cell {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  max-width: 100%;
+  padding: 10px;
+  overflow: hidden;
 }
 
-#player-search:focus {
-    outline: none;
-    border-color: #007bff;
-    box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+.logo-cell img {
+  max-width: 550px;
+  height: 350px;
 }
 
-#suggestions {
-    position: absolute;
-    top: 100%;
-    left: 0;
-    right: 0;
-    background: white;
-    border: 1px solid #ddd;
-    border-top: none;
-    border-radius: 0 0 6px 6px;
-    max-height: 300px;
-    overflow-y: auto;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-    z-index: 100;
+#logo {
+  max-width: 550px;
+  height: 350px;
+  display: block;
+  object-fit: contain;
 }
 
-/* Search container */
-.search-container {
-    position: relative;
-    display: inline-block;
-    width: 100%;
-    max-width: 400px;
+/* Photo Styling */
+#photoA, #photoB {
+  width: 50px;
+  height: 50px;
+  object-fit: cover;
+  border-radius: 50%;
+  border: 2px solid #ddd;
 }
 
-/* Highlighting for better stats - green background */
+/* Player Photos Container (hidden) */
+.player-photos {
+  display: none;
+}
+
+/* Statistical Highlighting */
 .better-stat {
-    background-color: #c8e6c8 !important;
-    color: black !important;
-    font-weight: bold !important;
-    font-size: 1.05rem !important;
+  background-color: #d4edda !important;
+  font-weight: bold !important;
+  color: black !important;
+  font-size: 1.05rem !important;
 }
 
-/* Alternative highlighting with subtle border */
 .better-stat-alt {
-    background-color: #e8f5e8 !important;
-    color: black !important;
-    font-weight: bold;
-    border: 2px solid #4caf50 !important;
+  background-color: #e8f5e8 !important;
+  color: black !important;
+  font-weight: bold;
+  border: 2px solid #4caf50 !important;
 }
 
-/* For tied stats (optional) */
 .tied-stat {
-    background-color: #fff3cd !important;
-    color: black !important;
-    font-weight: bold;
+  background-color: #fff3cd !important;
+  color: black !important;
+  font-weight: bold;
 }
 
 /* Enhanced table cell styling to work better with highlighting */
 td.stat-cell {
-    position: relative;
-    transition: background-color 0.3s ease, color 0.3s ease;
+  position: relative;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 /* Make sure the highlighting overrides monospace font and makes numbers bold */
 td.better-stat {
-    font-family: monospace;
-    font-size: 1.05rem !important;
-    font-weight: bold !important;
-    white-space: nowrap;
+  font-family: monospace;
+  font-size: 1.05rem !important;
+  font-weight: bold !important;
+  white-space: nowrap;
 }
 
 /* Optional: Add a subtle animation when highlighting is applied */
 @keyframes highlight-pulse {
-    0% { transform: scale(1); }
-    50% { transform: scale(1.02); }
-    100% { transform: scale(1); }
+  0% { transform: scale(1); }
+  50% { transform: scale(1.02); }
+  100% { transform: scale(1); }
 }
 
 .better-stat.animate {
-    animation: highlight-pulse 0.5s ease-in-out;
+  animation: highlight-pulse 0.5s ease-in-out;
 }
 
+/* Modal Styling */
+.modal {
+  display: none;
+  position: fixed;
+  z-index: 1000;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  animation: fadeIn 0.3s ease;
+}
 
-/* Responsive design */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.modal-content {
+  background-color: #fff;
+  margin: 15% auto;
+  padding: 24px;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  width: 90%;
+  max-width: 500px;
+  animation: slideIn 0.3s ease;
+}
+
+@keyframes slideIn {
+  from { 
+    transform: translateY(-50px);
+    opacity: 0;
+  }
+  to { 
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.modal-content h3 {
+  margin-top: 0;
+  margin-bottom: 16px;
+  color: #333;
+  font-size: 20px;
+}
+
+.modal-content p {
+  margin-bottom: 20px;
+  color: #666;
+  line-height: 1.5;
+}
+
+/* Player/Team Options in Modal */
+.player-options {
+  margin-bottom: 24px;
+}
+
+.player-option {
+  padding: 16px;
+  border: 2px solid #e9ecef;
+  border-radius: 6px;
+  margin-bottom: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.player-option:hover {
+  border-color: #007bff;
+  background-color: #f8f9ff;
+}
+
+.player-option:last-child {
+  margin-bottom: 0;
+}
+
+.player-details strong {
+  display: block;
+  font-size: 16px;
+  color: #333;
+  margin-bottom: 4px;
+}
+
+.player-meta {
+  font-size: 13px;
+  color: #666;
+}
+
+.modal-close {
+  background-color: #6c757d;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.2s ease;
+}
+
+.modal-close:hover {
+  background-color: #5a6268;
+}
+
+/* Suggestion Styling */
+.suggestion-item {
+  padding: 12px 16px;
+  border-bottom: 1px solid #eee;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.suggestion-item:hover {
+  background-color: #f8f9fa;
+}
+
+.suggestion-item:last-child {
+  border-bottom: none;
+}
+
+.disambiguation-note {
+  font-size: 12px;
+  color: #666;
+  font-style: italic;
+}
+
+.suggestion-item.error {
+  color: #dc3545;
+  cursor: default;
+}
+
+.suggestion-item.error:hover {
+  background-color: transparent;
+}
+
+/* Search Container */
+.search-container {
+  position: relative;
+  display: inline-block;
+  width: 100%;
+  max-width: 400px;
+}
+
+#player-search {
+  position: relative;
+  padding: 12px 16px;
+  font-size: 16px;
+  border: 2px solid #ddd;
+  border-radius: 6px;
+  width: 100%;
+  max-width: 400px;
+  transition: border-color 0.2s ease;
+}
+
+#player-search:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+}
+
+#suggestions {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: white;
+  border: 1px solid #ddd;
+  border-top: none;
+  border-radius: 0 0 6px 6px;
+  max-height: 300px;
+  overflow-y: auto;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  z-index: 100;
+}
+
+/* Responsive Design */
 @media (max-width: 768px) {
-    .modal-content {
-        margin: 10% auto;
-        width: 95%;
-        padding: 20px;
-    }
-    
-    .player-option {
-        padding: 12px;
-    }
-    
-    .modal-content h3 {
-        font-size: 18px;
-    }
+  .input-row {
+    flex-direction: column;
+  }
+  
+  .input-container {
+    min-width: unset;
+  }
+  
+  .mode-tabs {
+    flex-wrap: wrap;
+  }
+  
+  table {
+    font-size: 12px;
+  }
+  
+  th, td {
+    padding: 8px 4px;
+  }
+  
+  .modal-content {
+    margin: 10% auto;
+    width: 95%;
+    padding: 20px;
+  }
+  
+  .player-option {
+    padding: 12px;
+  }
+  
+  .modal-content h3 {
+    font-size: 18px;
+  }
 }
 
+/* Mobile table layout */
 @media (max-width: 600px) {
   table, thead, tbody, th, td, tr {
     display: block;
   }
+  
   thead tr {
     display: none;
   }
+  
   tbody tr {
     margin-bottom: 1rem;
     border: 1px solid #ccc;
     padding: 10px;
   }
+  
   tbody td {
     padding-left: 50%;
     position: relative;
     white-space: normal;
     text-align: left;
   }
+  
   tbody td::before {
     position: absolute;
     top: 10px;
@@ -450,18 +578,27 @@ td.better-stat {
     white-space: nowrap;
     font-weight: bold;
   }
-  tbody td:nth-of-type(1)::before { content: "Player A"; }
-  tbody td:nth-of-type(2)::before { content: "Stat"; }
-  tbody td:nth-of-type(3)::before { content: "Player B"; }
+  
+  tbody td:nth-of-type(1)::before { 
+    content: "Player A"; 
+  }
+  
+  tbody td:nth-of-type(2)::before { 
+    content: "Stat"; 
+  }
+  
+  tbody td:nth-of-type(3)::before { 
+    content: "Player B"; 
+  }
 
   tbody td.better-stat {
-        background-color: #c8e6c8 !important;
-        color: #2e7d2e !important;
-        font-weight: bold;
-    }
-    
-    tbody td.better-stat::before {
-        color: #2e7d2e !important;
-        font-weight: bold;
-    }
+    background-color: #d4edda !important;
+    color: #155724 !important;
+    font-weight: bold;
+  }
+  
+  tbody td.better-stat::before {
+    color: #155724 !important;
+    font-weight: bold;
+  }
 }

@@ -7,75 +7,140 @@
   </head>
   <body>
     <div class="container">
-      <h2>Compare Two Baseball Players</h2>
+      <h1 style="text-align: center; color: #333; margin-bottom: 30px;">Baseball Stat Comparison Tool</h1>
 
-      <div class="input-row">
-        <label>
-          Player A: 
-          <div class="input-container">
-            <input type="text" id="playerA" placeholder="Kyle Schwarber" autocomplete="off" />
-            <div id="dropdownA" class="dropdown"></div>
-          </div>
-        </label>
-        <label>
-          Player B:
-          <div class="input-container">
-            <input type="text" id="playerB" placeholder="Kyle Tucker" autocomplete="off" />
-            <div id="dropdownB" class="dropdown"></div>
-          </div>
-        </label>
-
-        <select id="viewMode">
-          <option value="combined">Career + Current Season</option>
-          <option value="live">Current Season Only (Live Stats)</option>
-          <option value="career">Career Totals (Through 2024)</option>
-          <option value="newest">Season-by-Season (Newest First)</option>
-          <option value="oldest">Season-by-Season (Oldest First)</option>
-        </select>
-
-        <button onclick="comparePlayers()">Compare</button>
+      <!-- Mode Selection Tabs -->
+      <div class="mode-tabs">
+        <button class="mode-tab active" onclick="switchMode('player')">Compare Players</button>
+        <button class="mode-tab" onclick="switchMode('team')">Compare Teams</button>
       </div>
 
-      <table id="comparisonTable" border="1" cellspacing="0" cellpadding="5">
-        <thead>
-          <tr>
-            <th id="playerAName">
-              <img
-                id="photoA"
-                src=""
-                alt="Player A Photo"
-                style="display: none"
-              />
-              <div class="player-name">Player A</div>
-            </th>
-            <th id="Logo">
-              <div class="logo-cell">
-                <img
-                  id="logo"
-                  src="static/assets/schipperStatlines.png"
-                  alt="Logo"
-                />
-              </div>
-            </th>
-            <th id="playerBName">
-              <img
-                id="photoB"
-                src=""
-                alt="Player B Photo"
-                style="display: none"
-              />
-              <div class="player-name">Player B</div>
-            </th>
-          </tr>
-          <tr>
-            <th colspan="3" class="stat-header">Stats</th>
-          </tr>
+      <!-- Player Comparison Section -->
+      <div id="player-section" class="comparison-section active">
+        <h2 style="margin-bottom: 20px; text-align: center;">Compare Two Baseball Players</h2>
+
+        <div class="input-row">
+          <label>
+            Player A: 
+            <div class="input-container">
+              <input type="text" id="playerA" placeholder="Kyle Schwarber" autocomplete="on" />
+              <div id="dropdownA" class="dropdown"></div>
+            </div>
+          </label>
           
-        </thead>
-        <tbody id="comparisonBody">
-          <!-- Filled dynamically by JS -->
-        </tbody>
-      </table>
+          <label>
+            Player B:
+            <div class="input-container">
+              <input type="text" id="playerB" placeholder="Kyle Tucker" autocomplete="on" />
+              <div id="dropdownB" class="dropdown"></div>
+            </div>
+          </label>
+
+          <label>
+            Mode:
+            <select id="viewMode">
+              <option value="combined">Career + Current Season</option>
+              <option value="live">Current Season Only (Live Stats)</option>
+              <option value="career">Career Totals (Through 2024)</option>
+              <option value="newest">Season-by-Season (Newest First)</option>
+              <option value="oldest">Season-by-Season (Oldest First)</option>
+            </select>
+          </label>
+
+          <button onclick="comparePlayers()">Compare Players</button>
+        </div>
+
+        <table id="comparisonTable" border="1" cellspacing="0" cellpadding="5">
+          <thead>
+            <tr>
+              <th id="playerAName">
+                <img id="photoA" src="" alt="Player A Photo" style="display: none" />
+                <div class="player-name">Player A</div>
+              </th>
+              <th id="Logo">
+                <div class="logo-cell">
+                  <img id="logo" src="static/assets/schipperStatlines.png" alt="Logo" />
+                </div>
+              </th>
+              <th id="playerBName">
+                <img id="photoB" src="" alt="Player B Photo" style="display: none" />
+                <div class="player-name">Player B</div>
+              </th>
+            </tr>
+            <tr>
+              <th colspan="3" class="stat-header">Stats</th>
+            </tr>
+          </thead>
+          <tbody id="comparisonBody">
+            <tr><td colspan='3' style='text-align: center; padding: 20px; color: #666; font-style: italic;'>Enter player names above and click "Compare Players" to see statistics</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Team Comparison Section -->
+      <div id="team-section" class="comparison-section">
+        <h2 style="margin-bottom: 20px; text-align: center;">Compare Two Baseball Teams</h2>
+
+        <div class="input-row">
+          <label>
+            Team A:
+            <div class="input-container">
+              <input type="text" id="teamA" placeholder="2023 HOU" autocomplete="on" />
+              <div id="dropdownTeamA" class="dropdown"></div>
+            </div>
+          </label>
+          
+          <label>
+            Team B:
+            <div class="input-container">
+              <input type="text" id="teamB" placeholder="2023 LAD" autocomplete="on" />
+              <div id="dropdownTeamB" class="dropdown"></div>
+            </div>
+          </label>
+
+          <label>
+            Mode:
+            <select id="teamViewMode">
+              <option value="season">Single Season</option>
+              <option value="career">Franchise History</option>
+            </select>
+          </label>
+
+          <label>
+            Stat Type:
+            <select id="teamStatType">
+              <option value="batting">Batting Stats</option>
+              <option value="pitching">Pitching Stats</option>
+            </select>
+          </label>
+
+          <button onclick="compareTeams()">Compare Teams</button>
+        </div>
+
+        <table id="teamComparisonTable" border="1" cellspacing="0" cellpadding="5">
+          <thead>
+            <tr>
+              <th id="teamAName">
+                <div class="player-name">Team A</div>
+              </th>
+              <th>
+                <div class="logo-cell">
+                  <img src="static/assets/schipperStatlines.png" alt="Logo" />
+                </div>
+              </th>
+              <th id="teamBName">
+                <div class="player-name">Team B</div>
+              </th>
+            </tr>
+            <tr>
+              <th colspan="3" class="stat-header">Team Stats</th>
+            </tr>
+          </thead>
+          <tbody id="teamComparisonBody">
+            <tr><td colspan='3' style='text-align: center; padding: 20px; color: #666; font-style: italic;'>Enter team names above and click "Compare Teams" to see statistics</td></tr>
+          </tbody>
+        </table>
+      </div>
     </div>
     <script src="/static/main.js"></script>
   </body>

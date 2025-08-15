@@ -89,7 +89,7 @@ function extractStats(res) {
 }
 
 function formatAwardsForStructuredDisplay(awards) {
-  console.log("formatAwardsForStructuredDisplay called with:", awards);
+  //console.log("formatAwardsForStructuredDisplay called with:", awards);
 
   // Handle null/undefined awards
   if (!awards) {
@@ -148,7 +148,7 @@ function formatAwardsForStructuredDisplay(awards) {
     };
   }
 
-  console.log("Processing summary:", summary);
+  //console.log("Processing summary:", summary);
 
   // Enhanced mapping to properly distinguish TSN All-Stars from MLB All-Star Games
   const result = {
@@ -192,7 +192,7 @@ function formatAwardsForStructuredDisplay(awards) {
     otherMajor: getOtherMajorAwards(summary),
   };
 
-  console.log("formatAwardsForStructuredDisplay result:", result);
+  // console.log("formatAwardsForStructuredDisplay result:", result);
   return result;
 }
 
@@ -264,8 +264,12 @@ function updateComparisonTable(resA, resB, nameA, nameB) {
   const photoA = document.getElementById("photoA");
   const photoB = document.getElementById("photoB");
 
-  thA.querySelector(".player-name").textContent = nameA || "Player A";
-  thB.querySelector(".player-name").textContent = nameB || "Player B";
+  // Apply capitalization to the names before displaying
+  const capitalizedNameA = capitalizePlayerName(nameA) || "Player A";
+  const capitalizedNameB = capitalizePlayerName(nameB) || "Player B";
+
+  thA.querySelector(".player-name").textContent = capitalizedNameA;
+  thB.querySelector(".player-name").textContent = capitalizedNameB;
 
   photoA.src = resA?.photo_url || "";
   photoB.src = resB?.photo_url || "";
@@ -297,9 +301,9 @@ function updateComparisonTable(resA, resB, nameA, nameB) {
   const playerType = resA.player_type || "hitter";
 
   // Debug logging for awards
-  console.log("=== AWARDS DEBUG ===");
-  console.log("Player A awards:", resA.awards);
-  console.log("Player B awards:", resB.awards);
+  // console.log("=== AWARDS DEBUG ===");
+  // console.log("Player A awards:", resA.awards);
+  // console.log("Player B awards:", resB.awards);
 
   if (["career", "combined", "live"].includes(mode)) {
     const statsA = extractStats(resA);
@@ -360,7 +364,7 @@ function updateComparisonTable(resA, resB, nameA, nameB) {
   }
 
   // AWARDS SECTION - Fixed to properly check for awards
-  console.log("Checking awards existence...");
+  //console.log("Checking awards existence...");
     const hasAwardsA =
       resA.awards && (resA.awards.summary || resA.awards.awards);
     const hasAwardsB =
@@ -370,17 +374,17 @@ function updateComparisonTable(resA, resB, nameA, nameB) {
     console.log("Live or season mode detected, skipping awards section");
   } else if (hasAwardsA || hasAwardsB) {
 
-    console.log("Has awards A:", hasAwardsA);
-    console.log("Has awards B:", hasAwardsB);
+    // console.log("Has awards A:", hasAwardsA);
+    // console.log("Has awards B:", hasAwardsB);
 
     if (hasAwardsA || hasAwardsB) {
-      console.log("Processing awards data...");
+      // console.log("Processing awards data...");
 
       const awardsA = formatAwardsForStructuredDisplay(resA.awards);
       const awardsB = formatAwardsForStructuredDisplay(resB.awards);
 
-      console.log("Formatted awards A:", awardsA);
-      console.log("Formatted awards B:", awardsB);
+      // console.log("Formatted awards A:", awardsA);
+      // console.log("Formatted awards B:", awardsB);
 
       // Define award rows to display (only show if at least one player has the award)
       const awardRows = [
@@ -444,7 +448,7 @@ function updateComparisonTable(resA, resB, nameA, nameB) {
       );
       if (hasAnyAwards && awardsAdded === 0) {
         const headerRow = document.createElement("tr");
-        headerRow.innerHTML = `<th colspan="3" class="stat-header">Awards & Honors <br> (Through 2024 Season)</th>`;
+        headerRow.innerHTML = `<th colspan="3" class="stat-header">Awards & Honors (Through 2024 Season)</th>`;
         tbody.appendChild(headerRow);
       }
 
@@ -465,9 +469,9 @@ function updateComparisonTable(resA, resB, nameA, nameB) {
           tbody.appendChild(row);
           awardsAdded++;
 
-          console.log(
-            `Added award row: ${awardRow.label} - A: ${displayA}, B: ${displayB}`
-          );
+          //console.log(
+          //  `Added award row: ${awardRow.label} - A: ${displayA}, B: ${displayB}`
+          //);
         }
       });
 
@@ -512,12 +516,12 @@ function updateComparisonTable(resA, resB, nameA, nameB) {
         row.innerHTML = `<td colspan="3" style="text-align: center; padding: 12px; color: #666; font-style: italic;">No major awards found for either player</td>`;
         tbody.appendChild(row);
       } else {
-        console.log(`Successfully added ${awardsAdded} award rows`);
+        // console.log(`Successfully added ${awardsAdded} award rows`);
       }
     } else {
       console.log("No awards data found for either player");
-      console.log("resA.awards:", resA.awards);
-      console.log("resB.awards:", resB.awards);
+      // console.log("resA.awards:", resA.awards);
+      // console.log("resB.awards:", resB.awards);
     }
   }
   // SEASON MODE HANDLING (unchanged)
@@ -1037,7 +1041,7 @@ function showDisambiguationModal(suggestions, originalName, callback, mode) {
     option.addEventListener("click", async function () {
       const selectedName = this.dataset.name;
       const selectedPlayerId = this.dataset.playerid;
-      console.log(`User selected: ${selectedName} (ID: ${selectedPlayerId})`);
+      //console.log(`User selected: ${selectedName} (ID: ${selectedPlayerId})`);
       modal.remove();
 
       // Hide any open dropdowns to prevent interference
@@ -1045,17 +1049,17 @@ function showDisambiguationModal(suggestions, originalName, callback, mode) {
 
       // Fetch stats for selected player using the exact name from suggestions
       try {
-        console.log(`Fetching stats for selected player: ${selectedName}`);
+        // console.log(`Fetching stats for selected player: ${selectedName}`);
         const response = await fetch(
           `/player-two-way?name=${encodeURIComponent(
             selectedName
           )}&mode=${mode}`
         );
-        console.log(`Response status for selected player: ${response.status}`);
+        // console.log(`Response status for selected player: ${response.status}`);
 
         if (response.ok) {
           const result = await response.json();
-          console.log("Successfully fetched selected player data:", result);
+          // console.log("Successfully fetched selected player data:", result);
           // Add the selected name to the result so we can use it in the display
           result.selected_name = selectedName;
           result.original_search_name = originalName;
@@ -1088,6 +1092,70 @@ function showDisambiguationModal(suggestions, originalName, callback, mode) {
   });
 }
 
+// Function to properly capitalize player names
+function capitalizePlayerName(name) {
+  if (!name) return name;
+  
+  // Handle special cases and particles that should remain lowercase
+  const lowercaseWords = ['de', 'del', 'la', 'le', 'van', 'von', 'da', 'dos', 'el'];
+  const romanNumerals = ['ii', 'iii', 'iv', 'v', 'vi', 'vii', 'viii', 'ix', 'x'];
+  
+  return name
+    .toLowerCase()
+    .split(' ')
+    .map((word, index) => {
+      // Always capitalize first word
+      if (index === 0) {
+        return capitalizeWord(word);
+      }
+      
+      // Handle Jr., Sr., III, etc.
+      if (word.includes('.') || romanNumerals.includes(word.toLowerCase())) {
+        return word.toUpperCase();
+      }
+      
+      // Keep certain particles lowercase (unless they're the first word)
+      if (lowercaseWords.includes(word.toLowerCase())) {
+        return word.toLowerCase();
+      }
+      
+      // Handle hyphenated names (like Mary-Jane)
+      if (word.includes('-')) {
+        return word.split('-')
+          .map(part => capitalizeWord(part))
+          .join('-');
+      }
+      
+      // Handle apostrophes (like O'Connor, D'Angelo)
+      if (word.includes("'")) {
+        return word.split("'")
+          .map(part => capitalizeWord(part))
+          .join("'");
+      }
+      
+      // Regular capitalization
+      return capitalizeWord(word);
+    })
+    .join(' ');
+}
+
+// Helper function to capitalize a single word
+function capitalizeWord(word) {
+  if (!word) return word;
+  return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+}
+
+// Alternative simpler function if you just want basic title case
+function simpleCapitalize(name) {
+  if (!name) return name;
+  
+  return name
+    .toLowerCase()
+    .split(' ')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' ');
+}
+
 async function comparePlayers() {
   const nameA = document.getElementById("playerA").value.trim();
   const nameB = document.getElementById("playerB").value.trim();
@@ -1105,10 +1173,10 @@ async function comparePlayers() {
   const tbody = document.getElementById("comparisonBody");
   tbody.innerHTML = `<tr><td colspan='4' style='text-align: center; padding: 20px;'>Loading player data...</td></tr>`;
 
-  console.log(`=== COMPARING PLAYERS ===`);
-  console.log(`Player A: ${nameA}`);
-  console.log(`Player B: ${nameB}`);
-  console.log(`Mode: ${mode}`);
+  // console.log(`=== COMPARING PLAYERS ===`);
+  // console.log(`Player A: ${nameA}`);
+  // console.log(`Player B: ${nameB}`);
+  // console.log(`Mode: ${mode}`);
 
   const [resA, resB] = await Promise.all([
     fetchStats(nameA, mode),
@@ -1353,6 +1421,156 @@ function setupPlayerAutofill() {
     }
   });
 }
+
+// Add team comparison mode
+const comparisonModes = {
+    'player': 'Compare Players',
+    'team': 'Compare Teams', 
+    'mixed': 'Player vs Team'  // Advanced feature
+};
+
+// Team stat label mappings
+const teamBattingLabelMap = {
+    R: "Runs",
+    H: "Hits", 
+    HR: "Home Runs",
+    RBI: "RBI",
+    SB: "Stolen Bases",
+    BB: "Walks",
+    SO: "Strikeouts",
+    BA: "Batting Avg",
+    OBP: "On-Base %",
+    SLG: "Slugging %", 
+    OPS: "OPS",
+    GIDP: "Double Plays"
+};
+
+const teamPitchingLabelMap = {
+    W: "Wins",
+    L: "Losses", 
+    CG: "Complete Games",
+    SHO: "Shutouts",
+    SV: "Saves",
+    IP: "Innings Pitched",
+    H: "Hits Allowed",
+    ER: "Earned Runs",
+    HR: "Home Runs Allowed", 
+    BB: "Walks",
+    SO: "Strikeouts",
+    ERA: "ERA",
+    WHIP: "WHIP",
+    K9: "K/9",
+    BB9: "BB/9"
+};
+
+// Enhanced fetch function for teams
+async function fetchTeamStats(team, mode, statType = "batting") {
+    try {
+        const response = await fetch(
+            `/team?team=${encodeURIComponent(team)}&mode=${mode}&stat_type=${statType}`
+        );
+        return await response.json();
+    } catch (e) {
+        console.error("Team fetch error:", e);
+        return { error: "Failed to fetch team data" };
+    }
+}
+
+// Team comparison function
+async function compareTeams() {
+    const teamA = document.getElementById("teamA").value.trim();
+    const teamB = document.getElementById("teamB").value.trim(); 
+    const mode = document.getElementById("teamViewMode").value;
+    const statType = document.getElementById("teamStatType").value;
+    
+    if (!teamA || !teamB) {
+        alert("Please enter both teams (e.g., '2023 HOU' or 'HOU')");
+        return;
+    }
+    
+    const tbody = document.getElementById("teamComparisonBody");
+    tbody.innerHTML = `<tr><td colspan='3' style='text-align: center; padding: 20px;'>Loading team data...</td></tr>`;
+    
+    const [resA, resB] = await Promise.all([
+        fetchTeamStats(teamA, mode, statType),
+        fetchTeamStats(teamB, mode, statType)
+    ]);
+    
+    updateTeamComparisonTable(resA, resB, teamA, teamB, statType);
+}
+
+function updateTeamComparisonTable(resA, resB, teamA, teamB, statType) {
+    const tbody = document.getElementById("teamComparisonBody");
+    const thA = document.getElementById("teamAName");
+    const thB = document.getElementById("teamBName");
+    
+    thA.textContent = resA?.team_name || teamA;
+    thB.textContent = resB?.team_name || teamB;
+    
+    tbody.innerHTML = "";
+    
+    if (!resA || !resB) {
+        tbody.innerHTML = `<tr><td colspan='3'>Error loading team data.</td></tr>`;
+        return;
+    }
+    
+    if (resA.error || resB.error) {
+        tbody.innerHTML = `<tr><td colspan='3'>${resA.error || resB.error}</td></tr>`;
+        return;
+    }
+    
+    const statsA = resA.stats;
+    const statsB = resB.stats;
+    const labelMap = statType === "batting" ? teamBattingLabelMap : teamPitchingLabelMap;
+    
+    // Add stats comparison
+    Object.keys(labelMap).forEach(key => {
+        if (statsA[key] !== undefined || statsB[key] !== undefined) {
+            const statName = labelMap[key];
+            let valA = statsA[key] || 0;
+            let valB = statsB[key] || 0;
+            
+            // Format decimal stats
+            const decimalStats = ["BA", "OBP", "SLG", "OPS", "ERA", "WHIP", "K9", "BB9"];
+            if (decimalStats.includes(key)) {
+                valA = typeof valA === 'number' ? valA.toFixed(3) : valA;
+                valB = typeof valB === 'number' ? valB.toFixed(3) : valB;
+                
+                // Remove leading zero for batting stats
+                if (["BA", "OBP", "SLG"].includes(key)) {
+                    valA = valA.toString().replace(/^0/, '');
+                    valB = valB.toString().replace(/^0/, '');
+                }
+            }
+            
+            const row = document.createElement("tr");
+            row.innerHTML = `
+                <td>${valA}</td>
+                <td style="background-color: #f1f3f4;"><strong>${statName}</strong></td>
+                <td>${valB}</td>
+            `;
+            tbody.appendChild(row);
+        }
+    });
+}
+
+// Mode switching functionality
+      function switchMode(mode) {
+        // Update tabs
+        document.querySelectorAll('.mode-tab').forEach(tab => {
+          tab.classList.remove('active');
+        });
+        event.target.classList.add('active');
+        
+        // Update sections
+        document.querySelectorAll('.comparison-section').forEach(section => {
+          section.classList.remove('active');
+        });
+        document.getElementById(mode + '-section').classList.add('active');
+        
+        // Hide any open dropdowns
+        hideAllDropdowns();
+      }
 
 // Initialize everything when DOM is ready
 document.addEventListener("DOMContentLoaded", () => {
